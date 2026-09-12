@@ -119,7 +119,7 @@ pub struct SubscriptionInfo {
 }
 
 /// A single owned item in a fan's billing summary
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 pub struct PurchaseInfo {
     /// Purchased post id, if a post purchase
     #[serde(rename = "postId")]
@@ -145,7 +145,7 @@ pub struct BillingMeResponse {
 }
 
 /// Request to start a subscription checkout
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[schema(example = json!({"tierId": "a1b2c3d4-5e6f-7890-abcd-ef1234567890"}))]
 pub struct SubscribeRequest {
     /// The tier to subscribe to
@@ -154,7 +154,7 @@ pub struct SubscribeRequest {
 }
 
 /// Request to start a one-off purchase checkout for a post or series
-#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
 #[schema(example = json!({"postId": "d290f1ee-6c54-4b01-90e6-d701748f0851"}))]
 pub struct PurchaseRequest {
     /// Post to buy (exclusive with `seriesId`)

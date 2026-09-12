@@ -28,6 +28,7 @@ use uuid::Uuid;
     "priceCents": 500,
     "freeAt": "2023-02-01T00:00:00Z"
 }))]
+#[expect(missing_copy_implementations, reason = "API type, keep non-Copy for evolvability")]
 pub struct PostAccess {
     /// Whether the requester may see the full post
     pub granted: bool,

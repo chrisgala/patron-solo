@@ -112,7 +112,7 @@ impl Post {
     pub fn is_gated(&self) -> bool {
         let rolled_free = self
             .free_at
-            .is_some_and(|t| t <= chrono::Utc::now().naive_utc());
+            .is_some_and(|t| t <= Utc::now().naive_utc());
         (self.min_tier_level.is_some() || self.price_cents.is_some()) && !rolled_free
     }
 }

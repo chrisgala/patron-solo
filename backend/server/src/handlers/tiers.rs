@@ -211,7 +211,9 @@ pub async fn update_tier(
                     .create_price(product_id, price_cents, &existing.currency, true)
                     .await?;
                 if let Some(old_price) = existing.stripe_price_id.as_ref() {
-                    client.archive_price(old_price).await.ok();
+                    if let Err(error) = client.archive_price(old_price).await {
+                        tracing::warn!(%error, "failed to archive old Stripe price");
+                    }
                 }
                 new_stripe_price = Some(price_id);
             }
