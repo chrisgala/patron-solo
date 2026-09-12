@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use shared::{
     errors::{ErrorResponse, ServiceError},
     models::{
-        auth::User,
+        auth::Creator,
         user_files::{
             FileStatus, UpdateUserFileRequest, UserFile, UserFileInfo, UserFileResponse,
             UserFilesResponse,
@@ -104,7 +104,7 @@ pub struct FileUploadResponse {
     )
 )]
 pub async fn upload_file(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     s3_service: web::Data<S3Service>,
     mut payload: Multipart,
@@ -245,7 +245,7 @@ pub async fn upload_file(
     )
 )]
 pub async fn list_files(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     query: web::Query<ListFilesQuery>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -308,7 +308,7 @@ pub async fn list_files(
     )
 )]
 pub async fn get_file(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     s3_service: web::Data<S3Service>,
     path: web::Path<Uuid>,
@@ -381,7 +381,7 @@ pub async fn get_file(
     )
 )]
 pub async fn update_file(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
     body: web::Json<UpdateUserFileRequest>,
@@ -478,7 +478,7 @@ pub async fn update_file(
     )
 )]
 pub async fn delete_file(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     s3_service: web::Data<S3Service>,
     path: web::Path<Uuid>,

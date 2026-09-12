@@ -14,7 +14,7 @@ use shared::{
             ApiKey, ApiKeyResponse, ApiKeysListResponse, CreateApiKeyRequest, CreateApiKeyResponse,
             UpdateApiKeyRequest,
         },
-        auth::User,
+        auth::{Creator, User},
     },
 };
 use utoipa::ToSchema;
@@ -77,7 +77,7 @@ fn hash_api_key(key: &str) -> String {
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn create_api_key(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     body: web::Json<CreateApiKeyRequest>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -159,7 +159,7 @@ pub async fn create_api_key(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn list_api_keys(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     query: web::Query<ListApiKeysQuery>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -225,7 +225,7 @@ pub async fn list_api_keys(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn get_api_key(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -270,7 +270,7 @@ pub async fn get_api_key(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn update_api_key(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
     body: web::Json<UpdateApiKeyRequest>,
@@ -343,7 +343,7 @@ pub async fn update_api_key(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn delete_api_key(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {

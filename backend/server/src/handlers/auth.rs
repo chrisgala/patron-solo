@@ -371,6 +371,14 @@ async fn update_existing_user_with_google_info(
     Ok(existing_user)
 }
 
+/// Role for a newly registered email: `creator` when it matches `CREATOR_EMAIL`
+fn role_for_email(email: &str) -> String {
+    match std::env::var("CREATOR_EMAIL") {
+        Ok(creator_email) if creator_email.eq_ignore_ascii_case(email) => "creator".to_owned(),
+        _ => "fan".to_owned(),
+    }
+}
+
 /// Helper function to create new user from Google info
 async fn create_new_user_from_google_info(
     google_user_info: &shared::services::auth::GoogleUserInfo,
@@ -395,6 +403,7 @@ async fn create_new_user_from_google_info(
         last_login: Some(Utc::now().naive_utc()),
         description: None,
         banner: None,
+        role: role_for_email(&google_user_info.email),
     };
 
     let _ = diesel::insert_into(users_dsl::users)
@@ -600,6 +609,7 @@ pub async fn register(
         last_login: Some(Utc::now().naive_utc()),
         description: None,
         banner: None,
+        role: role_for_email(&body.email),
     };
 
     let _ = diesel::insert_into(users_dsl::users)

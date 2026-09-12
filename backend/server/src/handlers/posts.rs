@@ -8,7 +8,7 @@ use serde::Deserialize;
 use shared::{
     errors::{ErrorResponse, ServiceError},
     models::{
-        auth::User,
+        auth::Creator,
         posts::{CreatePostRequest, Post, PostResponse, PostsListResponse, UpdatePostRequest},
         series::Series,
         series_length::SeriesLength,
@@ -56,7 +56,7 @@ pub struct ListPostsQuery {
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn create_post(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     body: web::Json<CreatePostRequest>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -151,7 +151,7 @@ pub async fn create_post(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn list_posts(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     query: web::Query<ListPostsQuery>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -219,7 +219,7 @@ pub async fn list_posts(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn get_post(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -267,7 +267,7 @@ pub async fn get_post(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn update_post(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
     body: web::Json<UpdatePostRequest>,
@@ -342,7 +342,7 @@ pub async fn update_post(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn delete_post(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {

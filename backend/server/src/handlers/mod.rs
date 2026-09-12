@@ -15,3 +15,6 @@ pub mod api_keys;
 
 /// Outrank SEO integration handlers
 pub mod outrank;
+
+/// Public site information handlers
+pub mod site;

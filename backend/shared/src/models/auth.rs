@@ -145,6 +145,17 @@ pub struct User {
     pub description: Option<String>,
     /// URL to user's banner image
     pub banner: Option<String>,
+    /// Role of the user: `creator` (site owner, at most one) or `fan`
+    pub role: String,
+}
+
+impl User {
+    /// Whether this user is the site's single creator
+    #[inline]
+    #[must_use]
+    pub fn is_creator(&self) -> bool {
+        self.role == "creator"
+    }
 }
 
 /// User information for API responses and internal use
@@ -198,6 +209,9 @@ pub struct UserInfo {
     /// URL to user's banner image
     #[schema(example = "https://example.com/banner.jpg")]
     pub banner: Option<String>,
+    /// Role of the user: `creator` or `fan`
+    #[schema(example = "fan")]
+    pub role: String,
 }
 
 impl FromRequest for User {
@@ -256,7 +270,61 @@ impl From<User> for UserInfo {
             last_login: user.last_login,
             description: user.description,
             banner: user.banner,
+            role: user.role,
         }
+    }
+}
+
+/// Extractor requiring the authenticated user to be the site's creator.
+///
+/// Wraps [`User::from_request`] and rejects with 403 when the user's role is
+/// not `creator`. Use for all admin/write endpoints.
+#[derive(Debug, Clone)]
+pub struct Creator(pub User);
+
+impl std::ops::Deref for Creator {
+    type Target = User;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl FromRequest for Creator {
+    type Error = Error;
+    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Error>>>>;
+
+    #[inline]
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        let user_fut = User::from_request(req, payload);
+        Box::pin(async move {
+            let user = user_fut.await?;
+            if user.is_creator() {
+                Ok(Self(user))
+            } else {
+                Err(actix_web::error::ErrorForbidden("Creator access required"))
+            }
+        })
+    }
+}
+
+/// Optional-auth extractor: resolves to `Some(User)` when a valid session or
+/// API key is present, `None` otherwise. Never rejects the request.
+///
+/// Use for public endpoints whose response varies by entitlement (teaser vs
+/// full content).
+#[derive(Debug, Clone)]
+pub struct MaybeUser(pub Option<User>);
+
+impl FromRequest for MaybeUser {
+    type Error = Error;
+    type Future = Pin<Box<dyn std::future::Future<Output = Result<Self, Self::Error>>>>;
+
+    #[inline]
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        let user_fut = User::from_request(req, payload);
+        Box::pin(async move { Ok(Self(user_fut.await.ok())) })
     }
 }
 

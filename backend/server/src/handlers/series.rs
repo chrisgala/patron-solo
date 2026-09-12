@@ -8,7 +8,7 @@ use serde::Deserialize;
 use shared::{
     errors::{ErrorResponse, ServiceError},
     models::{
-        auth::User,
+        auth::Creator,
         series::{
             CreateSeriesRequest, Series, SeriesListResponse, SeriesResponse, UpdateSeriesRequest,
         },
@@ -52,7 +52,7 @@ pub struct ListSeriesQuery {
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn create_series(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     body: web::Json<CreateSeriesRequest>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -115,7 +115,7 @@ pub async fn create_series(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn list_series(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     query: web::Query<ListSeriesQuery>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -192,7 +192,7 @@ pub async fn list_series(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn get_series(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -248,7 +248,7 @@ pub async fn get_series(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn update_series(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
     body: web::Json<UpdateSeriesRequest>,
@@ -329,7 +329,7 @@ pub async fn update_series(
     security(("cookieAuth" = [], "bearerAuth" = []))
 )]
 pub async fn delete_series(
-    user: User,
+    user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {

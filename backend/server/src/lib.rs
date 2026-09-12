@@ -25,6 +25,53 @@ use tracing_subscriber::EnvFilter;
 use utoipa::OpenApi;
 use utoipa_redoc::{Redoc, Servable};
 
+/// Idempotently promote the `CREATOR_EMAIL` account to the creator role.
+///
+/// Runs at boot so an account that registered before `CREATOR_EMAIL` was set
+/// (or a changed creator email) is reconciled without manual SQL. The partial
+/// unique index `one_creator_only` guarantees at most one creator exists.
+async fn promote_creator(db_service: &DbService) -> Result<(), Box<dyn std::error::Error>> {
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+    use shared::schema::users::dsl as users_dsl;
+
+    let Ok(creator_email) = std::env::var("CREATOR_EMAIL") else {
+        return Ok(());
+    };
+    if creator_email.trim().is_empty() {
+        return Ok(());
+    }
+
+    let pool = db_service.pool();
+    let mut conn = pool.get().await?;
+
+    let demoted = diesel::update(
+        users_dsl::users
+            .filter(users_dsl::role.eq("creator"))
+            .filter(users_dsl::email.ne(&creator_email)),
+    )
+    .set(users_dsl::role.eq("fan"))
+    .execute(&mut conn)
+    .await?;
+    if demoted > 0 {
+        println!("Demoted {demoted} stale creator account(s).");
+    }
+
+    let promoted = diesel::update(
+        users_dsl::users
+            .filter(users_dsl::email.eq(&creator_email))
+            .filter(users_dsl::role.ne("creator")),
+    )
+    .set(users_dsl::role.eq("creator"))
+    .execute(&mut conn)
+    .await?;
+    if promoted > 0 {
+        println!("Promoted {creator_email} to creator.");
+    }
+
+    Ok(())
+}
+
 /// Entry point for the Patron backend server, sets up services and starts the HTTP server.
 ///
 /// # Errors
@@ -118,6 +165,10 @@ pub async fn main() -> std::io::Result<()> {
             ));
         }
     };
+
+    if let Err(e) = promote_creator(&db_service).await {
+        eprintln!("Failed to ensure creator role: {e}");
+    }
 
     let redis_config = match config.redis_config() {
         Ok(cfg) => cfg,
@@ -311,6 +362,11 @@ pub async fn main() -> std::io::Result<()> {
                                     .route(web::put().to(handlers::api_keys::update_api_key))
                                     .route(web::delete().to(handlers::api_keys::delete_api_key)),
                             ),
+                    )
+                    .service(
+                        web::scope("/public").service(
+                            web::resource("/site").route(web::get().to(handlers::site::get_site)),
+                        ),
                     )
                     .service(
                         web::scope("/outrank").service(

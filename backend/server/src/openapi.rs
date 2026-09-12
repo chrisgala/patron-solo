@@ -6,6 +6,7 @@ use crate::handlers::auth::{
     ResetPasswordRequest, ResetPasswordResponse, UpdateUserInfoRequest, UpdateUserInfoResponse,
 };
 use crate::handlers::outrank::{OutrankWebhookPayload, OutrankWebhookResponse};
+use crate::handlers::site::{CreatorProfile, SiteResponse};
 use crate::handlers::user_files::{FileUploadRequest, FileUploadResponse};
 use shared::models::api_keys::{
     ApiKeyResponse, ApiKeysListResponse, CreateApiKeyRequest, CreateApiKeyResponse,
@@ -80,6 +81,7 @@ use utoipa::{
         crate::handlers::api_keys::update_api_key,
         crate::handlers::api_keys::delete_api_key,
         crate::handlers::outrank::process_webhook,
+        crate::handlers::site::get_site,
     ),
     components(
         schemas(
@@ -120,6 +122,8 @@ use utoipa::{
             UpdateApiKeyRequest,
             OutrankWebhookPayload,
             OutrankWebhookResponse,
+            CreatorProfile,
+            SiteResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -130,6 +134,7 @@ use utoipa::{
         (name = "Posts", description = "Post creation and management endpoints"),
         (name = "API Keys", description = "API key creation and management endpoints"),
         (name = "Outrank", description = "Outrank SEO integration webhook endpoints"),
+        (name = "Public", description = "Anonymous-accessible public site endpoints"),
     ),
     servers(
         (url = "http://localhost:8080", description = "Local development server"),
