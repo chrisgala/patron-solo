@@ -108,13 +108,6 @@ test.describe('comments and likes', () => {
   });
 
   test('over-long comment (>5000 chars) is rejected with a 4xx', async () => {
-    // BUG: the backend rejects the comment but maps the validation error to
-    // ServiceError::Unknown, which surfaces as HTTP 500
-    // ("Unknown error: Comment must be between 1 and 5000 characters").
-    // A validation failure should be a 400. Repro:
-    //   POST /api/posts/{id}/comments with 5001 chars of content -> 500.
-    test.fixme();
-
     const res = await entitled.post(`${BACKEND_URL}/api/posts/${freePost.id}/comments`, {
       data: { content: 'x'.repeat(5001) },
     });
