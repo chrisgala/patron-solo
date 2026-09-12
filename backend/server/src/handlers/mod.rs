@@ -33,3 +33,6 @@ pub mod public;
 
 /// Web Push subscription handlers
 pub mod push;
+
+/// Engagement handlers: comments and likes
+pub mod engagement;

@@ -145,6 +145,28 @@ diesel::table! {
 }
 
 diesel::table! {
+    comments (id) {
+        id -> Uuid,
+        post_id -> Uuid,
+        user_id -> Uuid,
+        parent_id -> Nullable<Uuid>,
+        content -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+        deleted_at -> Nullable<Timestamp>,
+    }
+}
+
+diesel::table! {
+    post_likes (id) {
+        id -> Uuid,
+        post_id -> Uuid,
+        user_id -> Uuid,
+        created_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     push_subscriptions (id) {
         id -> Uuid,
         user_id -> Nullable<Uuid>,
@@ -216,6 +238,10 @@ diesel::joinable!(purchases -> users (user_id));
 diesel::joinable!(purchases -> posts (post_id));
 diesel::joinable!(purchases -> series (series_id));
 diesel::joinable!(push_subscriptions -> users (user_id));
+diesel::joinable!(comments -> posts (post_id));
+diesel::joinable!(comments -> users (user_id));
+diesel::joinable!(post_likes -> posts (post_id));
+diesel::joinable!(post_likes -> users (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     api_keys,
@@ -231,4 +257,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     stripe_events,
     purchases,
     push_subscriptions,
+    comments,
+    post_likes,
 );

@@ -81,10 +81,87 @@ pub struct PublicPostResponse {
     /// Image gallery file ids; None when locked
     #[serde(rename = "imageFileIds")]
     pub image_file_ids: Option<Vec<Uuid>>,
+    /// Total likes on the post
+    #[serde(rename = "likeCount")]
+    pub like_count: i64,
+    /// Total (non-deleted) comments on the post
+    #[serde(rename = "commentCount")]
+    pub comment_count: i64,
+    /// Whether the requesting user has liked the post
+    #[serde(rename = "likedByMe")]
+    pub liked_by_me: bool,
+}
+
+/// Per-post engagement numbers used while building public responses
+#[derive(Debug, Clone, Copy, Default)]
+struct Engagement {
+    /// Total likes
+    likes: i64,
+    /// Total comments
+    comments: i64,
+    /// Requester has liked
+    liked_by_me: bool,
+}
+
+/// Load like/comment counts (and the requester's likes) for a set of posts
+async fn load_engagement(
+    conn: &mut diesel_async::AsyncPgConnection,
+    post_ids: &[Uuid],
+    user_id: Option<Uuid>,
+) -> Result<std::collections::HashMap<Uuid, Engagement>, ServiceError> {
+    use shared::schema::comments::dsl as comments_dsl;
+    use shared::schema::post_likes::dsl as likes_dsl;
+
+    let mut map: std::collections::HashMap<Uuid, Engagement> = std::collections::HashMap::new();
+    if post_ids.is_empty() {
+        return Ok(map);
+    }
+
+    let like_counts: Vec<(Uuid, i64)> = likes_dsl::post_likes
+        .filter(likes_dsl::post_id.eq_any(post_ids))
+        .group_by(likes_dsl::post_id)
+        .select((likes_dsl::post_id, diesel::dsl::count_star()))
+        .load(conn)
+        .await
+        .map_err(|e| ServiceError::Database(e.to_string()))?;
+    for (post_id, count) in like_counts {
+        map.entry(post_id).or_default().likes = count;
+    }
+
+    let comment_counts: Vec<(Uuid, i64)> = comments_dsl::comments
+        .filter(comments_dsl::post_id.eq_any(post_ids))
+        .filter(comments_dsl::deleted_at.is_null())
+        .group_by(comments_dsl::post_id)
+        .select((comments_dsl::post_id, diesel::dsl::count_star()))
+        .load(conn)
+        .await
+        .map_err(|e| ServiceError::Database(e.to_string()))?;
+    for (post_id, count) in comment_counts {
+        map.entry(post_id).or_default().comments = count;
+    }
+
+    if let Some(user_id) = user_id {
+        let liked: Vec<Uuid> = likes_dsl::post_likes
+            .filter(likes_dsl::post_id.eq_any(post_ids))
+            .filter(likes_dsl::user_id.eq(user_id))
+            .select(likes_dsl::post_id)
+            .load(conn)
+            .await
+            .map_err(|e| ServiceError::Database(e.to_string()))?;
+        for post_id in liked {
+            map.entry(post_id).or_default().liked_by_me = true;
+        }
+    }
+
+    Ok(map)
 }
 
 /// Map a post through an entitlement decision into its public shape
-fn to_public_post(post: Post, entitlements: &UserEntitlements) -> PublicPostResponse {
+fn to_public_post(
+    post: Post,
+    entitlements: &UserEntitlements,
+    engagement: Engagement,
+) -> PublicPostResponse {
     let decision = can_access_post(entitlements, &post);
     let access = PostAccess {
         granted: decision.granted,
@@ -111,6 +188,9 @@ fn to_public_post(post: Post, entitlements: &UserEntitlements) -> PublicPostResp
             image_file_ids: post
                 .image_file_ids
                 .map(|ids| ids.into_iter().flatten().collect()),
+            like_count: engagement.likes,
+            comment_count: engagement.comments,
+            liked_by_me: engagement.liked_by_me,
         }
     } else {
         PublicPostResponse {
@@ -127,6 +207,9 @@ fn to_public_post(post: Post, entitlements: &UserEntitlements) -> PublicPostResp
             audio_file_id: None,
             video_file_id: None,
             image_file_ids: None,
+            like_count: engagement.likes,
+            comment_count: engagement.comments,
+            liked_by_me: engagement.liked_by_me,
         }
     }
 }
@@ -200,11 +283,16 @@ pub async fn list_public_posts(
         None => (None, false),
     };
     let entitlements = load_user_entitlements(&mut conn, user_id, is_creator).await?;
+    let post_ids: Vec<Uuid> = posts.iter().map(|post| post.id).collect();
+    let engagement = load_engagement(&mut conn, &post_ids, user_id).await?;
 
     Ok(HttpResponse::Ok().json(PublicPostsResponse(
         posts
             .into_iter()
-            .map(|post| to_public_post(post, &entitlements))
+            .map(|post| {
+                let counts = engagement.get(&post.id).copied().unwrap_or_default();
+                to_public_post(post, &entitlements, counts)
+            })
             .collect(),
     )))
 }
@@ -260,8 +348,10 @@ pub async fn get_public_post(
         None => (None, false),
     };
     let entitlements = load_user_entitlements(&mut conn, user_id, is_creator).await?;
+    let engagement = load_engagement(&mut conn, &[post.id], user_id).await?;
+    let counts = engagement.get(&post.id).copied().unwrap_or_default();
 
-    Ok(HttpResponse::Ok().json(to_public_post(post, &entitlements)))
+    Ok(HttpResponse::Ok().json(to_public_post(post, &entitlements, counts)))
 }
 
 /// A series as seen by the public site

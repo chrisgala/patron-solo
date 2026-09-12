@@ -405,11 +405,26 @@ pub async fn main() -> std::io::Result<()> {
                             ),
                     )
                     .service(
+                        web::scope("/comments").service(
+                            web::resource("/{comment_id}")
+                                .route(web::delete().to(handlers::engagement::delete_comment)),
+                        ),
+                    )
+                    .service(
                         web::scope("/posts")
                             .service(
                                 web::resource("")
                                     .route(web::post().to(handlers::posts::create_post))
                                     .route(web::get().to(handlers::posts::list_posts)),
+                            )
+                            .service(
+                                web::resource("/{post_id}/comments")
+                                    .route(web::post().to(handlers::engagement::create_comment)),
+                            )
+                            .service(
+                                web::resource("/{post_id}/like")
+                                    .route(web::post().to(handlers::engagement::like_post))
+                                    .route(web::delete().to(handlers::engagement::unlike_post)),
                             )
                             .service(
                                 web::resource("/{post_id}")
@@ -445,6 +460,14 @@ pub async fn main() -> std::io::Result<()> {
                             .service(
                                 web::resource("/posts")
                                     .route(web::get().to(handlers::public::list_public_posts)),
+                            )
+                            .service(
+                                web::resource("/posts/{post_id}/comments")
+                                    .route(web::get().to(handlers::engagement::list_comments)),
+                            )
+                            .service(
+                                web::resource("/posts/{post_id}/likes")
+                                    .route(web::get().to(handlers::engagement::get_likes)),
                             )
                             .service(
                                 web::resource("/posts/{id_or_slug}")

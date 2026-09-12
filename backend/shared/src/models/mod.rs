@@ -24,3 +24,6 @@ pub mod billing;
 
 /// Web Push subscription data models.
 pub mod push;
+
+/// Engagement data models: comments and likes.
+pub mod engagement;

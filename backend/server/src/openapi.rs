@@ -11,6 +11,9 @@ use crate::handlers::public::{
     PublicSeriesResponse,
 };
 use crate::handlers::site::{CreatorProfile, SiteResponse};
+use shared::models::engagement::{
+    CommentResponse, CommentsListResponse, CreateCommentRequest, LikeStateResponse,
+};
 use shared::models::billing::{
     BillingMeResponse, CheckoutUrlResponse, PurchaseInfo, PurchaseRequest, SubscribeRequest,
     SubscriptionInfo,
@@ -113,6 +116,12 @@ use utoipa::{
         crate::handlers::push::push_key,
         crate::handlers::push::push_subscribe,
         crate::handlers::push::push_unsubscribe,
+        crate::handlers::engagement::list_comments,
+        crate::handlers::engagement::create_comment,
+        crate::handlers::engagement::delete_comment,
+        crate::handlers::engagement::get_likes,
+        crate::handlers::engagement::like_post,
+        crate::handlers::engagement::unlike_post,
     ),
     components(
         schemas(
@@ -175,6 +184,10 @@ use utoipa::{
             PushKeyResponse,
             PushSubscribeRequest,
             PushUnsubscribeRequest,
+            CommentResponse,
+            CommentsListResponse,
+            CreateCommentRequest,
+            LikeStateResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -189,6 +202,7 @@ use utoipa::{
         (name = "Tiers", description = "Membership tier management endpoints"),
         (name = "Billing", description = "Subscription and purchase endpoints"),
         (name = "Push", description = "Web Push notification endpoints"),
+        (name = "Engagement", description = "Comments and likes endpoints"),
     ),
     servers(
         (url = "http://localhost:8080", description = "Local development server"),

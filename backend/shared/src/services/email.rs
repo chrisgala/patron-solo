@@ -205,7 +205,7 @@ impl EmailService {
         let creds = Credentials::new(config.username.clone(), config.password.clone());
 
         // SMTP_INSECURE=true sends without TLS, for local catchers like Mailpit
-        let insecure = std::env::var("SMTP_INSECURE")
+        let insecure = env::var("SMTP_INSECURE")
             .map(|v| v == "true" || v == "1")
             .unwrap_or(false);
         let mailer = if insecure {
