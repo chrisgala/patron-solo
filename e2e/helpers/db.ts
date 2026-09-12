@@ -4,6 +4,8 @@ import { BACKEND_URL } from '../playwright.config';
 
 export const E2E_PREFIX = 'e2e-';
 
+// One pool per worker process; all spec files share it, so it is never
+// explicitly ended (the worker exiting closes the connections).
 const pool = new Pool({
   host: 'localhost',
   port: 5432,
@@ -11,6 +13,7 @@ const pool = new Pool({
   password: 'password',
   database: 'postgres',
   max: 2,
+  allowExitOnIdle: true,
 });
 
 export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
@@ -112,8 +115,4 @@ export async function cleanupE2eRows(): Promise<void> {
   await query(`DELETE FROM series WHERE slug LIKE $1 AND is_feed = false`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM tiers WHERE name LIKE $1`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM users WHERE email LIKE $1`, [`${E2E_PREFIX}%`]);
-}
-
-export async function closeDb(): Promise<void> {
-  await pool.end();
 }

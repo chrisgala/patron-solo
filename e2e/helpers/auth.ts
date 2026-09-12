@@ -33,11 +33,17 @@ export async function loginViaApi(page: Page, email: string, password: string): 
   }
 }
 
-/** Logs in through the real /login form and waits for the redirect home. */
+/**
+ * Logs in through the real two-step /login form (email -> password) and
+ * waits for the post-login redirect.
+ */
 export async function loginViaUi(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/login');
-  await page.locator('input#email').fill(email);
-  await page.locator('input#password').fill(password);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await expect(page).toHaveURL(`${FRONTEND_URL}/`);
+  await page.getByPlaceholder('Enter your email').fill(email);
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByPlaceholder('Enter your password').fill(password);
+  await page.getByRole('button', { name: 'Log in', exact: true }).click();
+  // Lands on /home which the router serves as the public home page,
+  // or on / when ProtectedRoute redirects the now-authenticated user.
+  await expect(page).toHaveURL(new RegExp(`${FRONTEND_URL}/(home)?$`));
 }
