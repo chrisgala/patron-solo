@@ -1,5 +1,5 @@
 import { JSX, useState } from 'react';
-import { Link } from 'react-router';
+import { useNavigate } from 'react-router';
 import { Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PostAccess, purchase } from '@/lib/api';
@@ -34,6 +34,7 @@ interface PaywallCtasProps {
  */
 const PaywallCtas = ({ access, postId }: PaywallCtasProps): JSX.Element => {
   const [isBuying, setIsBuying] = useState(false);
+  const navigate = useNavigate();
 
   /**
    * Starts a Stripe checkout for a one-off purchase of this post.
@@ -57,8 +58,11 @@ const PaywallCtas = ({ access, postId }: PaywallCtasProps): JSX.Element => {
       </div>
       <div className="flex flex-wrap items-center justify-center gap-3">
         {access.requiredTierLevel !== null && (
-          <Button asChild containerClassName="w-max">
-            <Link to="/membership">Join tier {access.requiredTierLevel}</Link>
+          <Button
+            containerClassName="w-max"
+            onClick={() => void navigate('/membership', { viewTransition: true })}
+          >
+            Join tier {access.requiredTierLevel}
           </Button>
         )}
         {access.priceCents !== null && (
