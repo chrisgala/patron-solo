@@ -6,7 +6,21 @@ use crate::handlers::auth::{
     ResetPasswordRequest, ResetPasswordResponse, UpdateUserInfoRequest, UpdateUserInfoResponse,
 };
 use crate::handlers::outrank::{OutrankWebhookPayload, OutrankWebhookResponse};
+use crate::handlers::public::{
+    PostAccess, PublicPostResponse, PublicPostsResponse, PublicSeriesListResponse,
+    PublicSeriesResponse,
+};
 use crate::handlers::site::{CreatorProfile, SiteResponse};
+use shared::models::billing::{
+    BillingMeResponse, CheckoutUrlResponse, PurchaseInfo, PurchaseRequest, SubscribeRequest,
+    SubscriptionInfo,
+};
+use shared::models::posts::PostKind;
+use shared::models::push::{PushKeyResponse, PushSubscribeRequest, PushUnsubscribeRequest};
+use shared::models::tiers::{
+    CreateTierRequest, TierResponse, TiersListResponse, UpdateTierRequest,
+};
+use shared::services::entitlements::AccessReason;
 use crate::handlers::user_files::{FileUploadRequest, FileUploadResponse};
 use shared::models::api_keys::{
     ApiKeyResponse, ApiKeysListResponse, CreateApiKeyRequest, CreateApiKeyResponse,
@@ -82,6 +96,23 @@ use utoipa::{
         crate::handlers::api_keys::delete_api_key,
         crate::handlers::outrank::process_webhook,
         crate::handlers::site::get_site,
+        crate::handlers::tiers::list_public_tiers,
+        crate::handlers::tiers::list_tiers,
+        crate::handlers::tiers::create_tier,
+        crate::handlers::tiers::update_tier,
+        crate::handlers::tiers::delete_tier,
+        crate::handlers::billing::subscribe,
+        crate::handlers::billing::purchase,
+        crate::handlers::billing::portal,
+        crate::handlers::billing::billing_me,
+        crate::handlers::stripe_webhook::stripe_webhook,
+        crate::handlers::public::list_public_posts,
+        crate::handlers::public::get_public_post,
+        crate::handlers::public::list_public_series,
+        crate::handlers::public::get_public_series,
+        crate::handlers::push::push_key,
+        crate::handlers::push::push_subscribe,
+        crate::handlers::push::push_unsubscribe,
     ),
     components(
         schemas(
@@ -124,6 +155,26 @@ use utoipa::{
             OutrankWebhookResponse,
             CreatorProfile,
             SiteResponse,
+            PostKind,
+            AccessReason,
+            PostAccess,
+            PublicPostResponse,
+            PublicPostsResponse,
+            PublicSeriesResponse,
+            PublicSeriesListResponse,
+            TierResponse,
+            TiersListResponse,
+            CreateTierRequest,
+            UpdateTierRequest,
+            SubscribeRequest,
+            PurchaseRequest,
+            CheckoutUrlResponse,
+            SubscriptionInfo,
+            PurchaseInfo,
+            BillingMeResponse,
+            PushKeyResponse,
+            PushSubscribeRequest,
+            PushUnsubscribeRequest,
         )
     ),
     modifiers(&SecurityAddon),
@@ -135,6 +186,9 @@ use utoipa::{
         (name = "API Keys", description = "API key creation and management endpoints"),
         (name = "Outrank", description = "Outrank SEO integration webhook endpoints"),
         (name = "Public", description = "Anonymous-accessible public site endpoints"),
+        (name = "Tiers", description = "Membership tier management endpoints"),
+        (name = "Billing", description = "Subscription and purchase endpoints"),
+        (name = "Push", description = "Web Push notification endpoints"),
     ),
     servers(
         (url = "http://localhost:8080", description = "Local development server"),

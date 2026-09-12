@@ -4,6 +4,48 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
 
+/// The kind of content a post holds
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum PostKind {
+    /// Short feed update
+    Update,
+    /// Long-form rich-text article
+    Article,
+    /// Audio episode
+    Audio,
+    /// Video episode
+    Video,
+    /// Image set / gallery
+    Images,
+}
+
+impl From<String> for PostKind {
+    #[inline]
+    fn from(s: String) -> Self {
+        match s.as_str() {
+            "update" => Self::Update,
+            "audio" => Self::Audio,
+            "video" => Self::Video,
+            "images" => Self::Images,
+            _ => Self::Article,
+        }
+    }
+}
+
+impl From<PostKind> for String {
+    #[inline]
+    fn from(kind: PostKind) -> Self {
+        match kind {
+            PostKind::Update => "update".to_owned(),
+            PostKind::Article => "article".to_owned(),
+            PostKind::Audio => "audio".to_owned(),
+            PostKind::Video => "video".to_owned(),
+            PostKind::Images => "images".to_owned(),
+        }
+    }
+}
+
 /// Database model for posts table
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable, Selectable)]
 #[diesel(table_name = crate::schema::posts)]
@@ -44,6 +86,35 @@ pub struct Post {
     /// Timestamp when the post was soft deleted (None if not deleted)
     #[serde(rename = "deletedAt")]
     pub deleted_at: Option<NaiveDateTime>,
+    /// Content kind: update, article, audio, video, images
+    pub kind: String,
+    /// Minimum subscription tier level required (None = no tier gate)
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// One-off purchase price in cents (None = not individually purchasable)
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Stripe Price id backing the one-off purchase
+    #[serde(rename = "stripePriceId")]
+    pub stripe_price_id: Option<String>,
+    /// Rolling paywall: the post becomes free at this time
+    #[serde(rename = "freeAt")]
+    pub free_at: Option<NaiveDateTime>,
+    /// File ids of the image gallery for `images` posts
+    #[serde(rename = "imageFileIds")]
+    pub image_file_ids: Option<Vec<Option<Uuid>>>,
+}
+
+impl Post {
+    /// Whether this post currently has any gate (tier or price) in force
+    #[inline]
+    #[must_use]
+    pub fn is_gated(&self) -> bool {
+        let rolled_free = self
+            .free_at
+            .is_some_and(|t| t <= chrono::Utc::now().naive_utc());
+        (self.min_tier_level.is_some() || self.price_cents.is_some()) && !rolled_free
+    }
 }
 
 /// API response model for posts
@@ -107,6 +178,24 @@ pub struct PostResponse {
     #[schema(example = "2023-01-01T12:00:00Z")]
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<DateTime<Utc>>,
+    /// Content kind: update, article, audio, video, images
+    #[schema(example = "article")]
+    pub kind: PostKind,
+    /// Minimum subscription tier level required (null = no tier gate)
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// One-off purchase price in cents (null = not individually purchasable)
+    #[schema(example = 500)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Rolling paywall: the post becomes free at this time
+    #[schema(example = "2023-02-01T00:00:00Z")]
+    #[serde(rename = "freeAt")]
+    pub free_at: Option<DateTime<Utc>>,
+    /// File ids of the image gallery for `images` posts
+    #[serde(rename = "imageFileIds")]
+    pub image_file_ids: Option<Vec<Uuid>>,
 }
 
 impl From<Post> for PostResponse {
@@ -124,6 +213,13 @@ impl From<Post> for PostResponse {
             video_file_id: post.video_file_id,
             created_at: post.created_at.map(|dt| dt.and_utc()),
             updated_at: post.updated_at.map(|dt| dt.and_utc()),
+            kind: post.kind.into(),
+            min_tier_level: post.min_tier_level,
+            price_cents: post.price_cents,
+            free_at: post.free_at.map(|dt| dt.and_utc()),
+            image_file_ids: post
+                .image_file_ids
+                .map(|ids| ids.into_iter().flatten().collect()),
         }
     }
 }
@@ -178,6 +274,24 @@ pub struct CreatePostRequest {
     #[schema(example = "d4e5f6a7-8901-2345-def0-234567890123")]
     #[serde(rename = "videoFileId")]
     pub video_file_id: Option<Uuid>,
+    /// Content kind (defaults to article)
+    #[schema(example = "article")]
+    pub kind: Option<PostKind>,
+    /// Minimum subscription tier level required to view
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// One-off purchase price in cents
+    #[schema(example = 500)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Rolling paywall: when the post becomes free
+    #[schema(example = "2023-02-01T00:00:00Z")]
+    #[serde(rename = "freeAt")]
+    pub free_at: Option<DateTime<Utc>>,
+    /// File ids of the image gallery for `images` posts
+    #[serde(rename = "imageFileIds")]
+    pub image_file_ids: Option<Vec<Uuid>>,
 }
 
 /// Request model for updating an existing post
@@ -225,6 +339,36 @@ pub struct UpdatePostRequest {
     #[schema(example = "d4e5f6a7-8901-2345-def0-234567890123")]
     #[serde(rename = "videoFileId")]
     pub video_file_id: Option<Uuid>,
+    /// Updated content kind
+    #[schema(example = "article")]
+    pub kind: Option<PostKind>,
+    /// Updated minimum tier level; null leaves unchanged (use `clearMinTier` to remove)
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// Remove the tier gate entirely
+    #[schema(example = false)]
+    #[serde(rename = "clearMinTier")]
+    pub clear_min_tier: Option<bool>,
+    /// Updated one-off price in cents; null leaves unchanged (use `clearPrice` to remove)
+    #[schema(example = 500)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Remove the one-off price
+    #[schema(example = false)]
+    #[serde(rename = "clearPrice")]
+    pub clear_price: Option<bool>,
+    /// Updated rolling-paywall time; null leaves unchanged (use `clearFreeAt` to remove)
+    #[schema(example = "2023-02-01T00:00:00Z")]
+    #[serde(rename = "freeAt")]
+    pub free_at: Option<DateTime<Utc>>,
+    /// Remove the rolling-paywall schedule
+    #[schema(example = false)]
+    #[serde(rename = "clearFreeAt")]
+    pub clear_free_at: Option<bool>,
+    /// Updated image gallery file ids
+    #[serde(rename = "imageFileIds")]
+    pub image_file_ids: Option<Vec<Uuid>>,
 }
 
 /// Response type for posts list endpoints

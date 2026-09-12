@@ -58,6 +58,7 @@ pub struct ListPostsQuery {
 pub async fn create_post(
     user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
+    push_service: web::Data<Option<shared::services::push::PushService>>,
     body: web::Json<CreatePostRequest>,
 ) -> Result<HttpResponse, actix_web::Error> {
     use shared::schema::{posts::dsl as posts_dsl, series::dsl as series_dsl};
@@ -65,7 +66,7 @@ pub async fn create_post(
     let pool = db_service.pool();
     let mut conn = pool.get().await.map_err(ServiceError::from)?;
 
-    let _series: Series = series_dsl::series
+    let series: Series = series_dsl::series
         .filter(series_dsl::id.eq(body.series_id))
         .filter(series_dsl::user_id.eq(user.id))
         .filter(series_dsl::deleted_at.is_null())
@@ -92,6 +93,16 @@ pub async fn create_post(
         created_at: Some(Utc::now().naive_utc()),
         updated_at: Some(Utc::now().naive_utc()),
         deleted_at: None,
+        kind: String::from(body.kind.unwrap_or(shared::models::posts::PostKind::Article)),
+        // new posts inherit the series' default tier gate unless set explicitly
+        min_tier_level: body.min_tier_level.or(series.min_tier_level),
+        price_cents: body.price_cents,
+        stripe_price_id: None,
+        free_at: body.free_at.map(|dt| dt.naive_utc()),
+        image_file_ids: body
+            .image_file_ids
+            .clone()
+            .map(|ids| ids.into_iter().map(Some).collect()),
     };
 
     let inserted_post: Post = diesel::insert_into(posts_dsl::posts)
@@ -129,6 +140,10 @@ pub async fn create_post(
         .execute(&mut conn)
         .await
         .map_err(|e| ServiceError::Database(e.to_string()))?;
+
+    if inserted_post.is_published.unwrap_or(false) {
+        super::push::notify_all_subscribers(db_service.clone(), push_service.as_ref().clone());
+    }
 
     Ok(HttpResponse::Created().json(PostResponse::from(inserted_post)))
 }
@@ -269,6 +284,7 @@ pub async fn get_post(
 pub async fn update_post(
     user: Creator,
     db_service: web::Data<shared::services::db::DbService>,
+    push_service: web::Data<Option<shared::services::push::PushService>>,
     path: web::Path<Uuid>,
     body: web::Json<UpdatePostRequest>,
 ) -> Result<HttpResponse, actix_web::Error> {
@@ -278,7 +294,7 @@ pub async fn update_post(
     let pool = db_service.pool();
     let mut conn = pool.get().await.map_err(ServiceError::from)?;
 
-    let _existing_post: Post = posts_dsl::posts
+    let existing_post: Post = posts_dsl::posts
         .inner_join(series_dsl::series.on(posts_dsl::series_id.eq(series_dsl::id)))
         .filter(posts_dsl::id.eq(post_id))
         .filter(series_dsl::user_id.eq(user.id))
@@ -292,21 +308,51 @@ pub async fn update_post(
             _ => ServiceError::Database(e.to_string()),
         })?;
 
+    let was_published = existing_post.is_published.unwrap_or(false);
     let current_time = Utc::now().naive_utc();
+
+    let min_tier_change: Option<Option<i32>> = if body.clear_min_tier.unwrap_or(false) {
+        Some(None)
+    } else {
+        body.min_tier_level.map(Some)
+    };
+    let price_change: Option<Option<i32>> = if body.clear_price.unwrap_or(false) {
+        Some(None)
+    } else {
+        body.price_cents.map(Some)
+    };
+    let free_at_change: Option<Option<chrono::NaiveDateTime>> =
+        if body.clear_free_at.unwrap_or(false) {
+            Some(None)
+        } else {
+            body.free_at.map(|dt| Some(dt.naive_utc()))
+        };
 
     let updated_post: Post = diesel::update(posts_dsl::posts.filter(posts_dsl::id.eq(post_id)))
         .set((
-            body.title.as_ref().map(|v| posts_dsl::title.eq(v)),
-            body.content.as_ref().map(|v| posts_dsl::content.eq(v)),
-            body.slug.as_ref().map(|v| posts_dsl::slug.eq(v)),
-            body.number.map(|v| posts_dsl::number.eq(v)),
-            body.is_published.map(|v| posts_dsl::is_published.eq(v)),
-            body.thumbnail_url
-                .as_ref()
-                .map(|v| posts_dsl::thumbnail_url.eq(v)),
-            body.audio_file_id.map(|v| posts_dsl::audio_file_id.eq(v)),
-            body.video_file_id.map(|v| posts_dsl::video_file_id.eq(v)),
-            posts_dsl::updated_at.eq(current_time),
+            (
+                body.title.as_ref().map(|v| posts_dsl::title.eq(v)),
+                body.content.as_ref().map(|v| posts_dsl::content.eq(v)),
+                body.slug.as_ref().map(|v| posts_dsl::slug.eq(v)),
+                body.number.map(|v| posts_dsl::number.eq(v)),
+                body.is_published.map(|v| posts_dsl::is_published.eq(v)),
+                body.thumbnail_url
+                    .as_ref()
+                    .map(|v| posts_dsl::thumbnail_url.eq(v)),
+                body.audio_file_id.map(|v| posts_dsl::audio_file_id.eq(v)),
+                body.video_file_id.map(|v| posts_dsl::video_file_id.eq(v)),
+                posts_dsl::updated_at.eq(current_time),
+            ),
+            (
+                body.kind.map(|v| posts_dsl::kind.eq(String::from(v))),
+                min_tier_change.map(|v| posts_dsl::min_tier_level.eq(v)),
+                price_change.map(|v| posts_dsl::price_cents.eq(v)),
+                free_at_change.map(|v| posts_dsl::free_at.eq(v)),
+                body.image_file_ids.as_ref().map(|ids| {
+                    posts_dsl::image_file_ids
+                        .eq(ids.iter().copied().map(Some).collect::<Vec<Option<Uuid>>>())
+                }),
+            ),
         ))
         .get_result(&mut conn)
         .await
@@ -319,6 +365,10 @@ pub async fn update_post(
             ),
             _ => ServiceError::Database(e.to_string()),
         })?;
+
+    if !was_published && updated_post.is_published.unwrap_or(false) {
+        super::push::notify_all_subscribers(db_service.clone(), push_service.as_ref().clone());
+    }
 
     Ok(HttpResponse::Ok().json(PostResponse::from(updated_post)))
 }

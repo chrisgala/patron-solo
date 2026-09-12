@@ -69,6 +69,64 @@ async fn promote_creator(db_service: &DbService) -> Result<(), Box<dyn std::erro
         println!("Promoted {creator_email} to creator.");
     }
 
+    ensure_feed_series(&mut conn).await?;
+
+    Ok(())
+}
+
+/// Ensure the creator has the hidden default "Feed" series that holds
+/// standalone update posts.
+async fn ensure_feed_series(
+    conn: &mut diesel_async::AsyncPgConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use diesel::prelude::*;
+    use diesel_async::RunQueryDsl;
+    use shared::schema::series::dsl as series_dsl;
+    use shared::schema::users::dsl as users_dsl;
+
+    let Some(creator_id) = users_dsl::users
+        .filter(users_dsl::role.eq("creator"))
+        .select(users_dsl::id)
+        .first::<uuid::Uuid>(conn)
+        .await
+        .optional()?
+    else {
+        return Ok(());
+    };
+
+    let feed_exists: i64 = series_dsl::series
+        .filter(series_dsl::user_id.eq(creator_id))
+        .filter(series_dsl::is_feed.eq(true))
+        .count()
+        .get_result(conn)
+        .await?;
+    if feed_exists > 0 {
+        return Ok(());
+    }
+
+    let feed = shared::models::series::Series {
+        id: uuid::Uuid::new_v4(),
+        user_id: creator_id,
+        title: "Feed".to_owned(),
+        description: None,
+        slug: "feed".to_owned(),
+        category: None,
+        cover_image_url: None,
+        created_at: Some(chrono::Utc::now().naive_utc()),
+        updated_at: Some(chrono::Utc::now().naive_utc()),
+        deleted_at: None,
+        price_cents: None,
+        stripe_price_id: None,
+        min_tier_level: None,
+        is_feed: true,
+    };
+    let _ = diesel::insert_into(series_dsl::series)
+        .values(&feed)
+        .on_conflict_do_nothing()
+        .execute(conn)
+        .await?;
+    println!("Created default feed series.");
+
     Ok(())
 }
 
@@ -170,6 +228,15 @@ pub async fn main() -> std::io::Result<()> {
         eprintln!("Failed to ensure creator role: {e}");
     }
 
+    let stripe_service = shared::services::stripe::StripeService::from_env();
+    if stripe_service.is_none() {
+        println!("Stripe not configured; billing endpoints disabled.");
+    }
+    let push_service = shared::services::push::PushService::from_env();
+    if push_service.is_none() {
+        println!("VAPID keys not configured; web push disabled.");
+    }
+
     let redis_config = match config.redis_config() {
         Ok(cfg) => cfg,
         Err(e) => {
@@ -246,6 +313,8 @@ pub async fn main() -> std::io::Result<()> {
             .app_data(web::Data::new(google_oauth_service.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(redis_manager.clone()))
+            .app_data(web::Data::new(stripe_service.clone()))
+            .app_data(web::Data::new(push_service.clone()))
             .service(Redoc::with_url("/redoc", ApiDoc::openapi()))
             .service(
                 web::scope("/api")
@@ -364,8 +433,79 @@ pub async fn main() -> std::io::Result<()> {
                             ),
                     )
                     .service(
-                        web::scope("/public").service(
-                            web::resource("/site").route(web::get().to(handlers::site::get_site)),
+                        web::scope("/public")
+                            .service(
+                                web::resource("/site")
+                                    .route(web::get().to(handlers::site::get_site)),
+                            )
+                            .service(
+                                web::resource("/tiers")
+                                    .route(web::get().to(handlers::tiers::list_public_tiers)),
+                            )
+                            .service(
+                                web::resource("/posts")
+                                    .route(web::get().to(handlers::public::list_public_posts)),
+                            )
+                            .service(
+                                web::resource("/posts/{id_or_slug}")
+                                    .route(web::get().to(handlers::public::get_public_post)),
+                            )
+                            .service(
+                                web::resource("/series")
+                                    .route(web::get().to(handlers::public::list_public_series)),
+                            )
+                            .service(
+                                web::resource("/series/{id_or_slug}")
+                                    .route(web::get().to(handlers::public::get_public_series)),
+                            )
+                            .service(
+                                web::resource("/push/key")
+                                    .route(web::get().to(handlers::push::push_key)),
+                            ),
+                    )
+                    .service(
+                        web::scope("/tiers")
+                            .service(
+                                web::resource("")
+                                    .route(web::post().to(handlers::tiers::create_tier))
+                                    .route(web::get().to(handlers::tiers::list_tiers)),
+                            )
+                            .service(
+                                web::resource("/{tier_id}")
+                                    .route(web::put().to(handlers::tiers::update_tier))
+                                    .route(web::delete().to(handlers::tiers::delete_tier)),
+                            ),
+                    )
+                    .service(
+                        web::scope("/billing")
+                            .service(
+                                web::resource("/subscribe")
+                                    .route(web::post().to(handlers::billing::subscribe)),
+                            )
+                            .service(
+                                web::resource("/purchase")
+                                    .route(web::post().to(handlers::billing::purchase)),
+                            )
+                            .service(
+                                web::resource("/portal")
+                                    .route(web::post().to(handlers::billing::portal)),
+                            )
+                            .service(
+                                web::resource("/me")
+                                    .route(web::get().to(handlers::billing::billing_me)),
+                            ),
+                    )
+                    .service(
+                        web::scope("/webhooks").service(
+                            web::resource("/stripe")
+                                .route(web::post().to(handlers::stripe_webhook::stripe_webhook)),
+                        ),
+                    )
+                    .service(
+                        web::scope("/push").service(
+                            web::resource("/subscribe")
+                                .route(web::post().to(handlers::push::push_subscribe))
+                                .route(web::delete().to(handlers::push::push_unsubscribe)),
                         ),
                     )
                     .service(

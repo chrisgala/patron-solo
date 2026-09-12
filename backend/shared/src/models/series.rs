@@ -34,10 +34,22 @@ pub struct Series {
     /// Timestamp when the series was soft deleted (None if not deleted)
     #[serde(rename = "deletedAt")]
     pub deleted_at: Option<NaiveDateTime>,
+    /// Bundle price in cents (None = not sellable as a bundle)
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Stripe Price id backing the bundle purchase
+    #[serde(rename = "stripePriceId")]
+    pub stripe_price_id: Option<String>,
+    /// Default minimum tier level applied to new posts in this series
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// Whether this is the hidden default feed series for standalone updates
+    #[serde(rename = "isFeed")]
+    pub is_feed: bool,
 }
 
 /// API response model for series
-#[derive(Debug, Serialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[schema(example = json!({
     "id": "e5f6a7b8-9012-3456-ef01-345678901234",
     "userId": "f6a7b8c9-0123-4567-f012-456789012345",
@@ -85,6 +97,18 @@ pub struct SeriesResponse {
     #[schema(example = "2023-01-01T12:00:00Z")]
     #[serde(rename = "updatedAt")]
     pub updated_at: Option<DateTime<Utc>>,
+    /// Bundle price in cents (null = not sellable as a bundle)
+    #[schema(example = 2000)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Default minimum tier level applied to new posts in this series
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// Whether this is the hidden default feed series
+    #[schema(example = false)]
+    #[serde(rename = "isFeed")]
+    pub is_feed: bool,
 }
 
 impl From<Series> for SeriesResponse {
@@ -100,6 +124,9 @@ impl From<Series> for SeriesResponse {
             length: None, // Will be populated in handlers when needed
             created_at: series.created_at.map(|dt| dt.and_utc()),
             updated_at: series.updated_at.map(|dt| dt.and_utc()),
+            price_cents: series.price_cents,
+            min_tier_level: series.min_tier_level,
+            is_feed: series.is_feed,
         }
     }
 }
@@ -143,6 +170,14 @@ pub struct CreateSeriesRequest {
     #[schema(example = "https://example.com/cover.jpg")]
     #[serde(rename = "coverImageUrl")]
     pub cover_image_url: Option<String>,
+    /// Bundle price in cents (optional)
+    #[schema(example = 2000)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Default minimum tier level for new posts in this series (optional)
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
 }
 
 /// Request model for updating an existing series
@@ -174,6 +209,22 @@ pub struct UpdateSeriesRequest {
     #[schema(example = "https://example.com/new-cover.jpg")]
     #[serde(rename = "coverImageUrl")]
     pub cover_image_url: Option<String>,
+    /// Updated bundle price in cents; null leaves unchanged (use `clearPrice` to remove)
+    #[schema(example = 2000)]
+    #[serde(rename = "priceCents")]
+    pub price_cents: Option<i32>,
+    /// Remove the bundle price
+    #[schema(example = false)]
+    #[serde(rename = "clearPrice")]
+    pub clear_price: Option<bool>,
+    /// Updated default minimum tier level for new posts
+    #[schema(example = 1)]
+    #[serde(rename = "minTierLevel")]
+    pub min_tier_level: Option<i32>,
+    /// Remove the default tier gate
+    #[schema(example = false)]
+    #[serde(rename = "clearMinTier")]
+    pub clear_min_tier: Option<bool>,
 }
 
 /// Response type for series list endpoints

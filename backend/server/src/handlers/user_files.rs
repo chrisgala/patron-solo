@@ -515,14 +515,16 @@ pub async fn delete_file(
     Ok(HttpResponse::NoContent().finish())
 }
 
-/// Serve file content without authentication
+/// Serve file content, enforcing post entitlements
 ///
-/// This endpoint is designed to be used to get file content without authentication.
-/// It returns the file content with proper cache headers for public access.
+/// A file referenced by any gated post streams only to requesters entitled to
+/// at least one referencing post. Files referenced only by free posts (and
+/// post thumbnails, which are URLs not file references) stay public. The
+/// creator can always stream their files.
 /// The file content is streamed directly from S3 to minimize memory usage for large files.
 ///
 /// # Errors
-/// Returns an error if file not found or S3 operations fail.
+/// Returns an error if file not found, access is denied, or S3 operations fail.
 #[utoipa::path(
     get,
     path = "/api/cdn/files/{file_id}",
@@ -533,15 +535,18 @@ pub async fn delete_file(
     responses(
         (status = 200, description = "Streaming file content with CDN-optimized headers", content_type = "application/octet-stream",
             example = "Binary file content with appropriate Content-Type and Cache-Control headers"),
+        (status = 403, description = "File is gated and the requester is not entitled", body = ErrorResponse),
         (status = 404, description = "CDN file not found", body = ErrorResponse),
         (status = 500, description = "CDN streaming error from storage backend", body = ErrorResponse)
     )
 )]
 pub async fn serve_file_cdn(
+    user: shared::models::auth::MaybeUser,
     db_service: web::Data<shared::services::db::DbService>,
     s3_service: web::Data<S3Service>,
     path: web::Path<Uuid>,
 ) -> Result<HttpResponse, actix_web::Error> {
+    use shared::schema::posts::dsl as posts_dsl;
     use shared::schema::user_files::dsl as files_dsl;
 
     let file_id = path.into_inner();
@@ -558,6 +563,42 @@ pub async fn serve_file_cdn(
             _ => actix_web::error::ErrorInternalServerError(format!("Database error: {e}")),
         })?;
 
+    // Entitlement gate: find every non-deleted post referencing this file
+    let referencing_posts: Vec<shared::models::posts::Post> = posts_dsl::posts
+        .filter(posts_dsl::deleted_at.is_null())
+        .filter(
+            posts_dsl::audio_file_id
+                .eq(file_id)
+                .or(posts_dsl::video_file_id.eq(file_id))
+                .or(posts_dsl::image_file_ids
+                    .contains(vec![Some(file_id)])
+                    .and(posts_dsl::image_file_ids.is_not_null())),
+        )
+        .load(&mut conn)
+        .await
+        .map_err(|e| ServiceError::Database(e.to_string()))?;
+
+    let is_gated_file = referencing_posts.iter().any(shared::models::posts::Post::is_gated);
+    if !referencing_posts.is_empty() {
+        let (user_id, is_creator) = match &user.0 {
+            Some(user) => (Some(user.id), user.is_creator()),
+            None => (None, false),
+        };
+        let entitlements =
+            shared::services::entitlements::load_user_entitlements(&mut conn, user_id, is_creator)
+                .await?;
+        let entitled = referencing_posts.iter().any(|post| {
+            post.is_published.unwrap_or(false)
+                && shared::services::entitlements::can_access_post(&entitlements, post).granted
+        });
+        if !entitled {
+            return Err(ServiceError::Forbidden(
+                "This file requires a subscription or purchase".to_owned(),
+            )
+            .into());
+        }
+    }
+
     let file_stream = s3_service
         .get_object_stream(&file.file_path)
         .await
@@ -569,9 +610,16 @@ pub async fn serve_file_cdn(
         chunk_result.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
     });
 
+    // gated media must never land in shared caches
+    let cache_control = if is_gated_file {
+        "private, max-age=0, no-store"
+    } else {
+        "public, max-age=86400, immutable"
+    };
+
     Ok(HttpResponse::Ok()
         .content_type(file.mime_type.as_str())
-        .insert_header(("Cache-Control", "public, max-age=86400, immutable"))
+        .insert_header(("Cache-Control", cache_control))
         .insert_header(("ETag", format!("\"{}\"", file.file_hash)))
         .insert_header((
             "Content-Disposition",

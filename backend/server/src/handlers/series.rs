@@ -72,6 +72,10 @@ pub async fn create_series(
         created_at: Some(Utc::now().naive_utc()),
         updated_at: Some(Utc::now().naive_utc()),
         deleted_at: None,
+        price_cents: body.price_cents,
+        stripe_price_id: None,
+        min_tier_level: body.min_tier_level,
+        is_feed: false,
     };
 
     let inserted_series: Series = diesel::insert_into(series_dsl::series)
@@ -287,6 +291,18 @@ pub async fn update_series(
                     .as_ref()
                     .map(|v| series_dsl::cover_image_url.eq(v)),
                 series_dsl::updated_at.eq(current_time),
+                if body.clear_price.unwrap_or(false) {
+                    Some(None)
+                } else {
+                    body.price_cents.map(Some)
+                }
+                .map(|v| series_dsl::price_cents.eq(v)),
+                if body.clear_min_tier.unwrap_or(false) {
+                    Some(None)
+                } else {
+                    body.min_tier_level.map(Some)
+                }
+                .map(|v| series_dsl::min_tier_level.eq(v)),
             ))
             .get_result(&mut conn)
             .await
