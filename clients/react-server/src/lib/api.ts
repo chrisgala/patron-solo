@@ -36,6 +36,28 @@ export interface PublicPostResponse {
   audioFileId: string | null;
   videoFileId: string | null;
   imageFileIds: string[] | null;
+  likeCount: number;
+  commentCount: number;
+  likedByMe: boolean;
+}
+
+/** A comment on a post */
+export interface CommentResponse {
+  id: string;
+  postId: string;
+  parentId: string | null;
+  content: string;
+  authorName: string | null;
+  authorAvatarUrl: string | null;
+  isCreator: boolean;
+  canDelete: boolean;
+  createdAt: string | null;
+}
+
+/** Like state of a post for the requester */
+export interface LikeStateResponse {
+  likeCount: number;
+  likedByMe: boolean;
 }
 
 /** Public creator profile */
@@ -419,3 +441,68 @@ export const pushUnsubscribe = (endpoint: string): Promise<void> =>
  * @returns {string} The CDN URL for the file
  */
 export const cdnFileUrl = (fileId: string): string => `${API_BASE}/api/cdn/files/${fileId}`;
+
+/**
+ * Lists comments on a post (requires access to the post).
+ *
+ * @param {string} postId - The post id
+ * @returns {Promise<CommentResponse[]>} Comments, oldest first
+ */
+export const getComments = (postId: string): Promise<CommentResponse[]> =>
+  request({ path: `/api/public/posts/${postId}/comments` });
+
+/**
+ * Creates a comment on a post.
+ *
+ * @param {object} params - The post id and comment content
+ * @param {string} params.postId - The post id
+ * @param {string} params.content - Comment text
+ * @param {string} [params.parentId] - Parent comment id when replying
+ * @returns {Promise<CommentResponse>} The created comment
+ */
+export const createComment = (params: {
+  postId: string;
+  content: string;
+  parentId?: string | null;
+}): Promise<CommentResponse> =>
+  request({
+    path: `/api/posts/${params.postId}/comments`,
+    method: 'POST',
+    body: { content: params.content, parentId: params.parentId ?? null },
+  });
+
+/**
+ * Deletes a comment (author or creator only).
+ *
+ * @param {string} commentId - The comment id
+ * @returns {Promise<void>} Resolves when deleted
+ */
+export const deleteComment = (commentId: string): Promise<void> =>
+  request({ path: `/api/comments/${commentId}`, method: 'DELETE' });
+
+/**
+ * Gets the like state of a post.
+ *
+ * @param {string} postId - The post id
+ * @returns {Promise<LikeStateResponse>} Like count and whether the requester liked it
+ */
+export const getLikes = (postId: string): Promise<LikeStateResponse> =>
+  request({ path: `/api/public/posts/${postId}/likes` });
+
+/**
+ * Likes a post (idempotent).
+ *
+ * @param {string} postId - The post id
+ * @returns {Promise<LikeStateResponse>} The new like state
+ */
+export const likePost = (postId: string): Promise<LikeStateResponse> =>
+  request({ path: `/api/posts/${postId}/like`, method: 'POST' });
+
+/**
+ * Removes a like from a post (idempotent).
+ *
+ * @param {string} postId - The post id
+ * @returns {Promise<LikeStateResponse>} The new like state
+ */
+export const unlikePost = (postId: string): Promise<LikeStateResponse> =>
+  request({ path: `/api/posts/${postId}/like`, method: 'DELETE' });

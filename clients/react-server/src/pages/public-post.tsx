@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router';
 import PxBorder from '@/components/px-border';
 import PublicHeader from '@/components/public-header';
 import PaywallCtas from '@/components/paywall-ctas';
+import { CommentsSection, LikeButton } from '@/components/engagement';
 import { useAuth } from '@/contexts/AuthContext';
 import { cdnFileUrl, getPublicPost, PublicPostResponse } from '@/lib/api';
 
@@ -111,7 +112,22 @@ export const PublicPost = (): JSX.Element => {
             </div>
             <div className="border-t-5 border-black bg-white">
               {post.access.granted ? (
-                <PostBody post={post} />
+                <>
+                  <PostBody post={post} />
+                  <div className="flex items-center gap-5 border-t-3 border-black px-10 py-4">
+                    <LikeButton
+                      postId={post.id}
+                      initialCount={post.likeCount}
+                      initialLiked={post.likedByMe}
+                    />
+                    <span className="text-base">
+                      {post.commentCount} comment{post.commentCount === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  <div className="border-t-3 border-black">
+                    <CommentsSection postId={post.id} />
+                  </div>
+                </>
               ) : (
                 <div className="flex flex-col items-center gap-6 p-10">
                   {post.thumbnailUrl && (

@@ -16,4 +16,6 @@ Single-creator membership site. One Creator publishes content; Fans pay for acce
 | **Gated** | A Post that requires an Entitlement beyond "anyone": it has a minimum tier and/or an individual price. |
 | **Free** | A Post with no minimum tier and no price — visible to everyone including anonymous visitors. |
 | **Rolling paywall / Rolled-free** | A Gated Post with a `free_at` time becomes Free once that time passes. The gate is scheduled to expire; the content is not re-gated afterwards. |
+| **Comment** | A Fan's or the Creator's message on a Post, optionally replying to one parent Comment (one level of threading). Visible and writable only to those Entitled to the Post. Soft-deleted by its author or the Creator. |
+| **Like** | A user's single, reversible endorsement of a Post they can access. Counts are public; who liked is not. |
 | **Livestream** *(reserved, v2)* | A future Entitlement subject: live video gated by the same rule as Posts. Not implemented; the Entitlement vocabulary deliberately does not assume its subject is a Post forever. |

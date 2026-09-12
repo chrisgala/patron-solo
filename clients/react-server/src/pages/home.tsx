@@ -1,6 +1,6 @@
 import { JSX, useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { Lock } from 'lucide-react';
+import { Heart, Lock, MessageSquare } from 'lucide-react';
 import PxBorder from '@/components/px-border';
 import FocusRing from '@/components/focus-ring';
 import PublicHeader from '@/components/public-header';
@@ -71,9 +71,17 @@ const PostCard = ({ post }: PostCardProps): JSX.Element => {
             <h3 className="text-xl group-hover:underline">{post.title}</h3>
           </Link>
         )}
-        {post.createdAt && (
-          <p className="text-sm">{new Date(post.createdAt).toLocaleDateString()}</p>
-        )}
+        <div className="flex items-center gap-3">
+          {post.createdAt && (
+            <p className="text-sm">{new Date(post.createdAt).toLocaleDateString()}</p>
+          )}
+          <span className="flex items-center gap-1 text-sm">
+            <Heart size={14} fill={post.likedByMe ? 'currentColor' : 'none'} /> {post.likeCount}
+          </span>
+          <span className="flex items-center gap-1 text-sm">
+            <MessageSquare size={14} /> {post.commentCount}
+          </span>
+        </div>
         {!locked && (post.kind === 'article' || post.kind === 'update') && post.content && (
           <p className="text-base">{excerpt(post.content)}</p>
         )}
