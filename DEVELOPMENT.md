@@ -54,3 +54,15 @@ The account whose email equals `CREATOR_EMAIL` is promoted to `creator` automati
 - Media streams through `/api/cdn/files/{id}` which enforces entitlements — a file referenced by a gated published post 403s for non-entitled users, and gated media is served with `Cache-Control: private`.
 - Role changes take effect on next login (the session stores a user snapshot).
 - Web push is payload-less: the service worker wakes and fetches the newest post to build the notification.
+
+## E2E tests
+
+Playwright end-to-end tests live in `e2e/` (their own npm package). They run
+against the local stack described above (frontend :5173, backend :8080,
+Postgres, Mailpit, MinIO) and need no Stripe configuration — entitlements are
+seeded straight into Postgres. See `e2e/README.md` for details.
+
+```bash
+cd e2e && npm install && npx playwright install chromium
+npx playwright test
+```
