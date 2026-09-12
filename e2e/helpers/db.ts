@@ -117,6 +117,7 @@ export async function cleanupE2eRows(): Promise<void> {
   await query(`DELETE FROM subscriptions WHERE stripe_subscription_id LIKE $1`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM push_subscriptions WHERE endpoint LIKE $1`, [`%${E2E_PREFIX}%`]);
   await query(`DELETE FROM posts WHERE slug LIKE $1`, [`${E2E_PREFIX}%`]);
+  await query(`DELETE FROM user_files WHERE original_filename LIKE $1`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM series WHERE slug LIKE $1 AND is_feed = false`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM tiers WHERE name LIKE $1`, [`${E2E_PREFIX}%`]);
   await query(`DELETE FROM users WHERE email LIKE $1`, [`${E2E_PREFIX}%`]);

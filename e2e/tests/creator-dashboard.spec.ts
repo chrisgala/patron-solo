@@ -54,17 +54,6 @@ test.describe('creator dashboard', () => {
     page,
     browser,
   }) => {
-    // BUG(1): a direct page load of /new-post (or any /dashboard/* route)
-    // bounces the creator to '/' — ProtectedRoute's redirect effect runs
-    // before AuthContext's async role re-fetch resolves (the patronts SDK
-    // strips `role` from the user object, so it must be re-fetched).
-    // BUG(2): reaching the dashboard by clicking through from '/' avoids the
-    // bounce, but then AppDataContext still holds no posts/series (it is only
-    // populated from SSR initial data and nothing triggers a client fetch),
-    // so the Content page shows the "create a series first" empty state and
-    // the post form has no series to choose from.
-    test.fixme();
-
     await loginViaApi(page, CREATOR.email, CREATOR.password);
     await page.goto('/new-post');
 
@@ -80,8 +69,10 @@ test.describe('creator dashboard', () => {
     await page.getByRole('combobox').filter({ hasText: 'Everyone' }).click();
     await page.getByRole('option', { name: gateTier.name }).click();
 
-    // Article body
-    await page.locator('[contenteditable="true"]').first().fill('Members-only UI post body');
+    // Article body (TinyMCE renders inside an iframe)
+    const editorBody = page.frameLocator('.tox-edit-area iframe').locator('body');
+    await editorBody.click();
+    await editorBody.fill('Members-only UI post body');
 
     // Publish immediately
     await page.getByText('Publish this post immediately').click();
@@ -121,15 +112,6 @@ test.describe('creator dashboard', () => {
   });
 
   test('creator can open /dashboard/content by direct URL', async ({ page }) => {
-    // BUG: on a full page load of a creator-only route, AuthContext resolves
-    // the role asynchronously (the patronts SDK strips `role`, so it is
-    // re-fetched from /api/auth/me in an effect). ProtectedRoute's effect runs
-    // first with isCreator=false and bounces the creator to '/'. Direct URL
-    // loads (or refreshes) of /dashboard/*, /new-post, /edit-post therefore
-    // never render for the creator. Fix: keep role with the user object (add
-    // `role` to the SDK UserInfo) or delay the redirect until role is known.
-    test.fixme();
-
     await loginViaApi(page, CREATOR.email, CREATOR.password);
     await page.goto('/dashboard/content');
     await expect(page).toHaveURL(/\/dashboard\/content/);
