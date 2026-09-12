@@ -100,7 +100,12 @@ export async function getFeedSeriesId(): Promise<string> {
 }
 
 export async function setFreeAt(postId: string, freeAt: Date | null): Promise<void> {
-  await query('UPDATE posts SET free_at = $2 WHERE id = $1', [postId, freeAt]);
+  // posts.free_at is `timestamp without time zone` holding UTC; pass an ISO
+  // string and strip the offset explicitly so the client TZ can't skew it.
+  await query(
+    "UPDATE posts SET free_at = ($2::timestamptz AT TIME ZONE 'utc') WHERE id = $1",
+    [postId, freeAt ? freeAt.toISOString() : null],
+  );
 }
 
 /**
