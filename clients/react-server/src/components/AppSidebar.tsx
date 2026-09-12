@@ -1,4 +1,13 @@
-import { LayoutDashboard, Library, ChartBar, Users, DollarSign } from 'lucide-react';
+import {
+  LayoutDashboard,
+  Library,
+  ChartBar,
+  Users,
+  DollarSign,
+  Home,
+  Star,
+  Settings,
+} from 'lucide-react';
 
 import {
   Sidebar,
@@ -15,6 +24,26 @@ import {
 import { JSX } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
 import { UserDropdown } from './user-dropdown';
+import { useAuth } from '@/contexts/AuthContext';
+
+const fanItems = [
+  {
+    title: 'Home',
+    url: '/',
+    icon: Home,
+  },
+  {
+    title: 'Membership',
+    url: '/membership',
+    icon: Star,
+  },
+  {
+    title: 'Settings',
+    url: '/settings',
+    icon: Settings,
+  },
+];
+
 const items = [
   {
     title: 'Dashboard',
@@ -49,6 +78,8 @@ const items = [
 export const AppSidebar = (): JSX.Element => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { isCreator } = useAuth();
+  const navItems = isCreator ? items : fanItems;
 
   return (
     <Sidebar collapsible="icon">
@@ -68,7 +99,7 @@ export const AppSidebar = (): JSX.Element => {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {navItems.map((item) => {
                 const IconComponent = item.icon;
                 const isActive = location.pathname === item.url;
                 return (

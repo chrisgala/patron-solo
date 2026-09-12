@@ -273,6 +273,16 @@ app.listen(port, '0.0.0.0', () => {
  */
 // eslint-disable-next-line no-unused-vars
 async function loadDataForUrl(url, req, res) {
+  // Public site routes render for anonymous visitors and fetch their own
+  // data client-side (gated content must not end up in anonymous SSR HTML).
+  const normalizedUrl = url.replace(/^\/+/, '').split('?')[0].replace(/\/+$/, '');
+  const isPublicRoute =
+    normalizedUrl === '' ||
+    normalizedUrl === 'membership' ||
+    normalizedUrl === 'posts' ||
+    normalizedUrl.startsWith('posts/') ||
+    normalizedUrl.startsWith('billing/');
+
   try {
     const cookies = req.headers.cookie || '';
 
@@ -289,6 +299,10 @@ async function loadDataForUrl(url, req, res) {
         user,
         shouldRedirect: { to: '/' },
       };
+    }
+
+    if (isPublicRoute) {
+      return { user };
     }
 
     try {
@@ -376,6 +390,10 @@ async function loadDataForUrl(url, req, res) {
       return { user };
     }
   } catch {
+    if (isPublicRoute) {
+      return { user: null };
+    }
+
     const isProtectedRoute =
       !url.startsWith('login') && !url.startsWith('register') && !url.startsWith('forgot-password');
 

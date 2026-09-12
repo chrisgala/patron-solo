@@ -16,6 +16,10 @@ import Series from '@/pages/series';
 import Post from '@/pages/post';
 import NewPost from '@/pages/new-post';
 import EditPost from '@/pages/edit-post';
+import PublicPost from '@/pages/public-post';
+import Membership from '@/pages/membership';
+import BillingResult from '@/pages/billing-result';
+import Settings from '@/pages/settings';
 
 type AppProps = {
   initialData?: {
@@ -49,11 +53,16 @@ const App = ({ initialData, url }: AppProps): JSX.Element => {
     switch (path) {
       case '':
       case '/':
-        return (
-          <ProtectedRoute requireAuth={true}>
-            <Home />
-          </ProtectedRoute>
-        );
+        return <Home />;
+      case 'membership':
+      case '/membership':
+        return <Membership />;
+      case 'billing/success':
+      case '/billing/success':
+        return <BillingResult variant="success" />;
+      case 'billing/cancel':
+      case '/billing/cancel':
+        return <BillingResult variant="cancel" />;
       case 'login':
       case '/login':
         return (
@@ -78,57 +87,67 @@ const App = ({ initialData, url }: AppProps): JSX.Element => {
       case 'dashboard/content':
       case '/dashboard/content':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Content />
           </ProtectedRoute>
         );
       case 'dashboard/insights':
       case '/dashboard/insights':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Insights />
           </ProtectedRoute>
         );
       case 'dashboard/audience':
       case '/dashboard/audience':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Audience />
           </ProtectedRoute>
         );
       case 'dashboard/payouts':
       case '/dashboard/payouts':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Payouts />
           </ProtectedRoute>
         );
       case 'new-post':
       case '/new-post':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <NewPost />
           </ProtectedRoute>
         );
       case 'edit-post':
       case '/edit-post':
         return (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <EditPost />
+          </ProtectedRoute>
+        );
+      case 'settings':
+      case '/settings':
+        return (
+          <ProtectedRoute requireAuth={true}>
+            <Settings />
           </ProtectedRoute>
         );
       default:
         // Handle dynamic routes
+        if (path.startsWith('/posts/') || path.startsWith('posts/')) {
+          return <PublicPost />;
+        }
         if (path.startsWith('/series/') || path.startsWith('series/')) {
           return (
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute requireAuth={true} requireCreator={true}>
               <Series />
             </ProtectedRoute>
           );
         }
         if (path.startsWith('/post/') || path.startsWith('post/')) {
           return (
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute requireAuth={true} requireCreator={true}>
               <Post />
             </ProtectedRoute>
           );
@@ -136,7 +155,7 @@ const App = ({ initialData, url }: AppProps): JSX.Element => {
         // Handle edit-post with query params
         if (path.startsWith('/edit-post?') || path.startsWith('edit-post?')) {
           return (
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute requireAuth={true} requireCreator={true}>
               <EditPost />
             </ProtectedRoute>
           );
@@ -144,16 +163,12 @@ const App = ({ initialData, url }: AppProps): JSX.Element => {
         // Handle new-post with query params
         if (path.startsWith('/new-post?') || path.startsWith('new-post?')) {
           return (
-            <ProtectedRoute requireAuth={true}>
+            <ProtectedRoute requireAuth={true} requireCreator={true}>
               <NewPost />
             </ProtectedRoute>
           );
         }
-        return (
-          <ProtectedRoute requireAuth={true}>
-            <Home />
-          </ProtectedRoute>
-        );
+        return <Home />;
     }
   };
 

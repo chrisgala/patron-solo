@@ -204,11 +204,23 @@ impl EmailService {
 
         let creds = Credentials::new(config.username.clone(), config.password.clone());
 
-        let mailer = SmtpTransport::starttls_relay(&config.host)
-            .map_err(|e| ServiceError::Config(format!("Failed to create SMTP transport: {e}")))?
-            .port(config.port)
-            .credentials(creds)
-            .build();
+        // SMTP_INSECURE=true sends without TLS, for local catchers like Mailpit
+        let insecure = std::env::var("SMTP_INSECURE")
+            .map(|v| v == "true" || v == "1")
+            .unwrap_or(false);
+        let mailer = if insecure {
+            SmtpTransport::builder_dangerous(&config.host)
+                .port(config.port)
+                .build()
+        } else {
+            SmtpTransport::starttls_relay(&config.host)
+                .map_err(|e| {
+                    ServiceError::Config(format!("Failed to create SMTP transport: {e}"))
+                })?
+                .port(config.port)
+                .credentials(creds)
+                .build()
+        };
 
         let result = tokio::task::spawn_blocking(move || mailer.send(&email))
             .await

@@ -19,6 +19,10 @@ import NewPost from '@/pages/new-post';
 import EditPost from '@/pages/edit-post';
 import Series from '@/pages/series';
 import Post from '@/pages/post';
+import PublicPost from '@/pages/public-post';
+import Membership from '@/pages/membership';
+import BillingResult from '@/pages/billing-result';
+import { registerServiceWorker } from '@/lib/push';
 
 const initialData = (window as any).__INITIAL_DATA__ as {
   user?: UserInfo | null;
@@ -35,11 +39,27 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        Component: () => (
-          <ProtectedRoute requireAuth={true}>
-            <Home />
-          </ProtectedRoute>
-        ),
+        Component: () => <Home />,
+        errorElement: <ErrorBoundary />,
+      },
+      {
+        path: 'posts/:slug',
+        Component: () => <PublicPost />,
+        errorElement: <ErrorBoundary />,
+      },
+      {
+        path: 'membership',
+        Component: () => <Membership />,
+        errorElement: <ErrorBoundary />,
+      },
+      {
+        path: 'billing/success',
+        Component: () => <BillingResult variant="success" />,
+        errorElement: <ErrorBoundary />,
+      },
+      {
+        path: 'billing/cancel',
+        Component: () => <BillingResult variant="cancel" />,
         errorElement: <ErrorBoundary />,
       },
       {
@@ -72,7 +92,7 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard/content',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Content />
           </ProtectedRoute>
         ),
@@ -81,7 +101,7 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard/insights',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Insights />
           </ProtectedRoute>
         ),
@@ -90,7 +110,7 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard/audience',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Audience />
           </ProtectedRoute>
         ),
@@ -99,7 +119,7 @@ export const router = createBrowserRouter([
       {
         path: 'dashboard/payouts',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Payouts />
           </ProtectedRoute>
         ),
@@ -108,7 +128,7 @@ export const router = createBrowserRouter([
       {
         path: 'new-post',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <NewPost />
           </ProtectedRoute>
         ),
@@ -117,7 +137,7 @@ export const router = createBrowserRouter([
       {
         path: 'edit-post',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <EditPost />
           </ProtectedRoute>
         ),
@@ -135,7 +155,7 @@ export const router = createBrowserRouter([
       {
         path: 'series/:seriesId',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Series />
           </ProtectedRoute>
         ),
@@ -144,7 +164,7 @@ export const router = createBrowserRouter([
       {
         path: 'post/:postId',
         Component: () => (
-          <ProtectedRoute requireAuth={true}>
+          <ProtectedRoute requireAuth={true} requireCreator={true}>
             <Post />
           </ProtectedRoute>
         ),
@@ -187,3 +207,5 @@ hydrateRoot(
     <App />
   </StrictMode>,
 );
+
+void registerServiceWorker();

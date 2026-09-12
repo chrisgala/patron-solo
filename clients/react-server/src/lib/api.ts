@@ -262,8 +262,7 @@ export const getPublicPost = (idOrSlug: string): Promise<PublicPostResponse> =>
  *
  * @returns {Promise<TierResponse[]>} Active tiers ordered by level
  */
-export const getPublicTiers = (): Promise<TierResponse[]> =>
-  request({ path: '/api/public/tiers' });
+export const getPublicTiers = (): Promise<TierResponse[]> => request({ path: '/api/public/tiers' });
 
 /**
  * Fetches the public series list.
@@ -376,10 +375,7 @@ export const createPost = (body: CreatePostPayload): Promise<unknown> =>
  * @param {UpdatePostPayload} params.body - Fields to update
  * @returns {Promise<unknown>} The updated post
  */
-export const updatePost = (params: {
-  postId: string;
-  body: UpdatePostPayload;
-}): Promise<unknown> =>
+export const updatePost = (params: { postId: string; body: UpdatePostPayload }): Promise<unknown> =>
   request({ path: `/api/posts/${params.postId}`, method: 'PUT', body: params.body });
 
 /**

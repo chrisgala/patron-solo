@@ -5,6 +5,7 @@ interface AuthContextType {
   user: UserInfo | null;
   // eslint-disable-next-line no-unused-vars
   setUser: (user: UserInfo | null) => void;
+  isCreator: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -25,9 +26,13 @@ interface AuthProviderProps {
 export const AuthProvider = ({ children, initialUser }: AuthProviderProps): JSX.Element => {
   const [user, setUser] = useState<UserInfo | null>(initialUser ?? null);
 
+  // The published patronts UserInfo type does not include the new role field
+  const isCreator = (user as (UserInfo & { role?: string }) | null)?.role === 'creator';
+
   const value = {
     user,
     setUser,
+    isCreator,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

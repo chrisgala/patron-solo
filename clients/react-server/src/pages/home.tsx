@@ -1,157 +1,146 @@
-import { Link2, PlusIcon } from 'lucide-react';
-import MainLayout from '../layouts/main';
-import { JSX } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { JSX, useEffect, useState } from 'react';
+import { Link } from 'react-router';
+import { Lock } from 'lucide-react';
 import PxBorder from '@/components/px-border';
-import { Link, useNavigate, useSearchParams } from 'react-router';
 import FocusRing from '@/components/focus-ring';
-import UnderContruction from '@/components/under-contruction';
-import { Customization } from '@/components/customization';
-import { useAuth } from '@/contexts/AuthContext';
-import { useAppData } from '@/contexts/AppDataContext';
-import NewSeriesForm from '@/components/new-series-form';
-import { Button } from '@/components/ui/button';
+import PublicHeader from '@/components/public-header';
+import PaywallCtas from '@/components/paywall-ctas';
+import { getPublicPosts, getSite, CreatorProfile, PublicPostResponse } from '@/lib/api';
 
 /**
+ * Strips HTML tags from rich text content and returns a short excerpt.
+ *
+ * @param {string} html - The HTML content
+ * @returns {string} A plain-text excerpt
+ */
+const excerpt = (html: string): string => {
+  const text = html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return text.length > 220 ? `${text.slice(0, 220)}...` : text;
+};
+
+interface PostCardProps {
+  /**
+   * The post to render
+   */
+  post: PublicPostResponse;
+}
+
+/**
+ * A single post card in the public feed.
+ *
+ * @param {PostCardProps} props - The component props
+ * @param {PublicPostResponse} props.post - The post to render
+ * @returns {JSX.Element} The post card
+ */
+const PostCard = ({ post }: PostCardProps): JSX.Element => {
+  const locked = !post.access.granted;
+
+  return (
+    <article className="bg-secondary-primary relative flex h-full flex-col gap-4 p-5">
+      <PxBorder width={3} radius="lg" />
+      <div className="bg-accent relative aspect-video">
+        <PxBorder width={3} radius="lg" />
+        {post.thumbnailUrl ? (
+          <img src={post.thumbnailUrl} alt={post.title} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <img src="/assets/series.png" alt="post" className="h-full w-full object-cover" />
+          </div>
+        )}
+        {locked && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50">
+            <Lock size={40} color="white" />
+          </div>
+        )}
+        <div className="absolute right-2.5 bottom-2.5 z-10">
+          <div className="relative m-[3px] bg-white px-1.5 py-[3px]">
+            <PxBorder width={3} radius="md" />
+            <span className="text-sm capitalize">{post.kind}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-1 flex-col gap-2">
+        {locked ? (
+          <h3 className="text-xl">{post.title}</h3>
+        ) : (
+          <Link className="group relative w-max outline-none" to={`/posts/${post.slug}`}>
+            <FocusRing width={3} />
+            <h3 className="text-xl group-hover:underline">{post.title}</h3>
+          </Link>
+        )}
+        {post.createdAt && (
+          <p className="text-sm">{new Date(post.createdAt).toLocaleDateString()}</p>
+        )}
+        {!locked && (post.kind === 'article' || post.kind === 'update') && post.content && (
+          <p className="text-base">{excerpt(post.content)}</p>
+        )}
+        {!locked && post.kind !== 'update' && (
+          <Link to={`/posts/${post.slug}`} className="text-base underline">
+            {post.kind === 'article' ? 'Read more' : 'View post'}
+          </Link>
+        )}
+      </div>
+      {locked && <PaywallCtas access={post.access} postId={post.id} />}
+    </article>
+  );
+};
+
+/**
+ * Public home page: creator profile header and the post feed.
+ *
  * @returns {JSX.Element} The Home component
  */
 export const Home = (): JSX.Element => {
-  const { user } = useAuth();
-  const { series, fetchSeries } = useAppData();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get('tab') || 'all';
-  const description = 'creating high quality chess lessons';
-  const urlSlug = 'bobby';
-  const navigate = useNavigate();
+  const [creator, setCreator] = useState<CreatorProfile | null>(null);
+  const [posts, setPosts] = useState<PublicPostResponse[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    /**
+     * Loads the site profile and public feed.
+     */
+    const load = async (): Promise<void> => {
+      try {
+        const [site, feed] = await Promise.all([getSite(), getPublicPosts({ limit: 30 })]);
+        setCreator(site.creator);
+        setPosts(feed);
+      } catch (loadError) {
+        console.error('Failed to load public feed:', loadError);
+        setError('Failed to load the feed. Please try again later.');
+      }
+    };
+    void load();
+  }, []);
 
   return (
-    <MainLayout>
-      <div className="bg-secondary-primary relative flex h-[300px] w-full items-center gap-[25px] border-b-5 border-b-black p-[50px] px-[100px]">
-        <div className="relative m-[5px] size-[190px]">
-          <img src={user?.avatarUrl ?? undefined} alt="pfp" className="size-full object-cover" />
-          <PxBorder width={5} radius="lg" />
-        </div>
-        <div className="flex flex-col gap-5">
-          <div className="relative m-[5px] w-max">
-            <PxBorder width={5} radius="md" />
-            <div className="bg-white px-[10px] py-[5px]">
-              <h2 className="text-3xl">{user?.displayName ?? undefined}</h2>
-            </div>
+    <div className="min-h-screen">
+      <PublicHeader creator={creator} />
+      <main className="p-[50px] px-6 md:px-[100px]">
+        {error && (
+          <div className="relative mx-auto max-w-[600px] bg-white p-10 text-center">
+            <PxBorder width={3} radius="lg" />
+            <p className="text-lg">{error}</p>
           </div>
-          <div className="relative m-[5px]">
-            <PxBorder width={5} radius="md" />
-            <div className="bg-white px-[10px] py-[5px]">
-              <p className="text-lg">{description}</p>
-            </div>
+        )}
+        {!error && posts === null && <p className="text-center text-lg">Loading posts...</p>}
+        {!error && posts !== null && posts.length === 0 && (
+          <div className="relative mx-auto max-w-[600px] bg-white p-10 text-center">
+            <PxBorder width={3} radius="lg" />
+            <p className="text-lg">No posts yet. Check back soon!</p>
           </div>
-        </div>
-        <div className="absolute top-0 right-0 mb-[5px] ml-[5px]">
-          <div className="absolute -bottom-[5px] left-0 h-[5px] w-full bg-black" />
-          <div className="absolute top-0 -left-[5px] h-full w-[5px] bg-black" />
-          <div className="flex items-center gap-2.5 bg-white px-[10px] py-[5px]">
-            <Link2 size={20} />
-            <p className="text-base">patron.com/{urlSlug}</p>
+        )}
+        {!error && posts !== null && posts.length > 0 && (
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-3">
+            {posts.map((post) => (
+              <PostCard key={post.id} post={post} />
+            ))}
           </div>
-        </div>
-        <Customization initialData={user ?? undefined} />
-      </div>
-      <main className="p-[50px] px-[100px]">
-        <Tabs
-          className="gap-10"
-          value={activeTab}
-          onValueChange={(value) => setSearchParams({ tab: value })}
-        >
-          <TabsList>
-            <TabsTrigger value="all">Series</TabsTrigger>
-            <TabsTrigger value="tiers">Tiers</TabsTrigger>
-          </TabsList>
-          <TabsContent
-            className="grid grid-cols-1 gap-10 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4"
-            value="all"
-          >
-            {!series || series.length === 0 ? (
-              <div className="relative col-span-full flex flex-col items-center justify-center gap-5 bg-white p-10">
-                <PxBorder width={3} radius="lg" />
-                <h2 className="text-2xl">Welcome to your Patron page!</h2>
-                <p className="text-lg">
-                  You need to create a series first before you can create posts and start sharing
-                  content with your audience.
-                </p>
-                <NewSeriesForm
-                  onSeriesCreated={fetchSeries}
-                  trigger={
-                    <Button containerClassName="w-max">
-                      Create Your First Series
-                      <PlusIcon size={20} />
-                    </Button>
-                  }
-                />
-              </div>
-            ) : (
-              <>
-                {series.map((series) => (
-                  <div
-                    className="bg-secondary-primary relative flex h-full flex-col justify-between gap-5 p-5"
-                    key={series.id}
-                  >
-                    <Link
-                      className="group flex flex-col gap-4 outline-none"
-                      to={`/series/${series.id}`}
-                    >
-                      <div className="bg-accent relative aspect-video">
-                        <PxBorder width={3} radius="lg" />
-                        {series.coverImageUrl ? (
-                          <img
-                            src={series.coverImageUrl}
-                            alt={series.title}
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center">
-                            <img
-                              src="/assets/series.png"
-                              alt="series"
-                              className="h-full w-full object-cover"
-                            />
-                          </div>
-                        )}
-                        {series.length && (
-                          <div className="absolute right-2.5 bottom-2.5">
-                            <div className="relative m-[3px] bg-white px-1.5 py-[3px]">
-                              <PxBorder width={3} radius="md" />
-                              <span className="text-sm">{series.length} posts</span>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <PxBorder width={3} radius="lg" />
-                      <FocusRing width={3} />
-                      <div className="flex flex-col gap-2">
-                        <h3 className="text-xl">{series.title}</h3>
-                        <p className="text-base">{series.description}</p>
-                      </div>
-                    </Link>
-                    <Button
-                      className="w-full"
-                      containerClassName="mt-0"
-                      onClick={() =>
-                        navigate(`/new-post?series-id=${series.id}`, { viewTransition: true })
-                      }
-                    >
-                      Create a new post
-                      <PlusIcon size={20} />
-                    </Button>
-                  </div>
-                ))}
-              </>
-            )}
-          </TabsContent>
-          <TabsContent className="gap-10" value="tiers">
-            <UnderContruction />
-          </TabsContent>
-        </Tabs>
+        )}
       </main>
-    </MainLayout>
+    </div>
   );
 };
 
