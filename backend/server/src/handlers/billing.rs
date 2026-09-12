@@ -185,7 +185,7 @@ pub async fn purchase(
                         _ => ServiceError::Database(e.to_string()),
                     })?;
                 let amount = post.price_cents.ok_or_else(|| {
-                    ServiceError::Unknown("This post is not purchasable".to_owned())
+                    ServiceError::BadRequest("This post is not purchasable".to_owned())
                 })?;
                 (
                     post.title,
@@ -208,7 +208,7 @@ pub async fn purchase(
                         _ => ServiceError::Database(e.to_string()),
                     })?;
                 let amount = series.price_cents.ok_or_else(|| {
-                    ServiceError::Unknown("This series is not purchasable".to_owned())
+                    ServiceError::BadRequest("This series is not purchasable".to_owned())
                 })?;
                 (
                     series.title,
@@ -219,7 +219,7 @@ pub async fn purchase(
                 )
             }
             _ => {
-                return Err(ServiceError::Unknown(
+                return Err(ServiceError::BadRequest(
                     "Provide exactly one of postId or seriesId".to_owned(),
                 )
                 .into())

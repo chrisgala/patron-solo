@@ -154,7 +154,7 @@ pub async fn create_comment(
     let post_id = path.into_inner();
     let content = body.content.trim();
     if content.is_empty() || content.chars().count() > MAX_COMMENT_CHARS {
-        return Err(ServiceError::Unknown(
+        return Err(ServiceError::BadRequest(
             "Comment must be between 1 and 5000 characters".to_owned(),
         )
         .into());

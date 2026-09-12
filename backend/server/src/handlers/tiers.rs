@@ -111,7 +111,7 @@ pub async fn create_tier(
     use shared::schema::tiers::dsl as tiers_dsl;
 
     if body.price_cents <= 0 {
-        return Err(ServiceError::Unknown("Price must be positive".to_owned()).into());
+        return Err(ServiceError::BadRequest("Price must be positive".to_owned()).into());
     }
 
     let (stripe_product_id, stripe_price_id) = match stripe.as_ref() {

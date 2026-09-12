@@ -60,6 +60,10 @@ pub enum ServiceError {
     /// Represents a forbidden/access denied error with a message.
     #[error("Forbidden: {0}")]
     Forbidden(String),
+
+    /// Represents an invalid request (validation failure) with a message.
+    #[error("Bad request: {0}")]
+    BadRequest(String),
 }
 
 impl From<aws_sdk_s3::Error> for ServiceError {
@@ -112,7 +116,7 @@ impl ResponseError for ServiceError {
 
         match *self {
             Self::NotFound(_) => HttpResponse::NotFound().json(error_response),
-            Self::Config(_) => HttpResponse::BadRequest().json(error_response),
+            Self::Config(_) | Self::BadRequest(_) => HttpResponse::BadRequest().json(error_response),
             Self::Conflict(_) => HttpResponse::Conflict().json(error_response),
             Self::Forbidden(_) => HttpResponse::Forbidden().json(error_response),
             Self::AwsSdk(_)
