@@ -29,6 +29,42 @@ services:
       timeout: 10s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit
+    container_name: patron_mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+
+  minio:
+    image: quay.io/minio/minio
+    container_name: patron_minio
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: quay.io/minio/mc
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
+      mc mb -p local/patron-local;
+      exit 0;
+      "
+
   patron-backend:
     image: skeptrune/patron-backend:latest
     container_name: patron_backend
@@ -48,3 +84,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  minio_data:
