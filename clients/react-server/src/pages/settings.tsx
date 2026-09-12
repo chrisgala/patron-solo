@@ -29,6 +29,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { patronClient } from '@/lib/utils';
 import PxBorder from '@/components/px-border';
+import Tiers from '@/components/tiers';
 
 // Validation schemas
 const profileSchema = z.object({
@@ -70,7 +71,7 @@ type AccountFormData = z.infer<typeof accountSchema>;
  * @returns {JSX.Element} The settings page
  */
 const Settings = (): JSX.Element => {
-  const { user } = useAuth();
+  const { user, isCreator } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
 
@@ -160,9 +161,19 @@ const Settings = (): JSX.Element => {
           <TabsList>
             <TabsTrigger value="profile">Profile</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>
+            {isCreator && <TabsTrigger value="tiers">Tiers</TabsTrigger>}
             {/* <TabsTrigger value="preferences">Preferences</TabsTrigger> */}
             <TabsTrigger value="danger">Danger Zone</TabsTrigger>
           </TabsList>
+
+          {/* Membership Tiers (creator only) */}
+          {isCreator && (
+            <TabsContent value="tiers" className="space-y-6">
+              <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-3">
+                <Tiers />
+              </div>
+            </TabsContent>
+          )}
 
           {/* Profile Settings */}
           <TabsContent value="profile" className="space-y-6">

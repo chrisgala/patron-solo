@@ -32,11 +32,38 @@ import {
 } from '@/components/ui/alert-dialog';
 import PxBorder from '@/components/px-border';
 import { patronClient } from '@/lib/utils';
-import { CreatePostRequest, PostResponse, UpdatePostRequest } from 'patronts/models';
+import { CreatePostRequest, PostResponse } from 'patronts/models';
 import { Editor } from '@tinymce/tinymce-react';
 import { useAppData } from '@/contexts/AppDataContext';
+import { createPost, getTiers, PostKind, TierResponse, updatePost } from '@/lib/api';
 
 import '../styling/tinymce.css';
+
+/**
+ * PostResponse extended with the single-creator gating fields the published
+ * patronts type does not know about yet.
+ */
+type ExtendedPost = PostResponse & {
+  kind?: PostKind;
+  minTierLevel?: number | null;
+  priceCents?: number | null;
+  freeAt?: string | null;
+  imageFileIds?: string[] | null;
+};
+
+const POST_KINDS: PostKind[] = ['update', 'article', 'audio', 'video', 'images'];
+
+/**
+ * Converts an ISO datetime into the value format of a datetime-local input.
+ *
+ * @param {string} iso - The ISO datetime string
+ * @returns {string} A "YYYY-MM-DDTHH:mm" local datetime string
+ */
+const isoToDatetimeLocal = (iso: string): string => {
+  const date = new Date(iso);
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+};
 
 interface PostFormProps {
   /**
@@ -56,6 +83,7 @@ interface PostFormProps {
  * @returns {JSX.Element} The post form component
  */
 const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Element => {
+  const extendedPost = existingPost as ExtendedPost | undefined;
   const [imagePreview, setImagePreview] = useState<string | null>(
     existingPost?.thumbnailUrl || null,
   );
@@ -63,12 +91,32 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [showNoSeriesModal, setShowNoSeriesModal] = useState<boolean>(false);
   const [selectedSeriesId, setSelectedSeriesId] = useState<string>(existingPost?.seriesId || '');
+  const [kind, setKind] = useState<PostKind>(extendedPost?.kind || 'article');
+  const [minTierLevel, setMinTierLevel] = useState<string>(
+    extendedPost?.minTierLevel != null ? String(extendedPost.minTierLevel) : 'everyone',
+  );
+  const [price, setPrice] = useState<string>(
+    extendedPost?.priceCents != null ? (extendedPost.priceCents / 100).toFixed(2) : '',
+  );
+  const [freeAt, setFreeAt] = useState<string>(
+    extendedPost?.freeAt ? isoToDatetimeLocal(extendedPost.freeAt) : '',
+  );
+  const [tiers, setTiers] = useState<TierResponse[]>([]);
+  const [galleryFileIds, setGalleryFileIds] = useState<string[]>(extendedPost?.imageFileIds || []);
+  const [galleryFiles, setGalleryFiles] = useState<File[]>([]);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
   const editorRef = useRef<any>(null);
 
   const { series, fetchPosts } = useAppData();
+
+  // Load tiers for the minimum-tier selector
+  useEffect(() => {
+    getTiers()
+      .then(setTiers)
+      .catch((error) => console.warn('Failed to load tiers:', error));
+  }, []);
 
   /**
    * Form instance for post creation/editing with default values and validation rules.
@@ -118,8 +166,12 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
       // Get content from TinyMCE editor
       const editorContent = editorRef.current?.getContent() || '';
 
-      // Validate editor content
-      if (!editorContent || editorContent.trim() === '' || editorContent === '<p></p>') {
+      // Validate editor content (only text kinds require a body)
+      const requiresContent = kind === 'article' || kind === 'update';
+      if (
+        requiresContent &&
+        (!editorContent || editorContent.trim() === '' || editorContent === '<p></p>')
+      ) {
         form.setError('content', {
           type: 'manual',
           message: 'Content is required',
@@ -136,26 +188,47 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
         .replace(/-+/g, '-')
         .trim();
 
+      // Upload any newly selected gallery images for `images` posts
+      let imageFileIds: string[] | undefined;
+      if (kind === 'images') {
+        const uploadedIds: string[] = [...galleryFileIds];
+        for (const file of galleryFiles) {
+          const uploadedFileResult = await patronClient.files.upload({ file });
+          uploadedIds.push(uploadedFileResult.file.id);
+        }
+        imageFileIds = uploadedIds;
+      }
+
+      const parsedPrice = price.trim() === '' ? null : Math.round(parseFloat(price) * 100);
+      const parsedMinTier = minTierLevel === 'everyone' ? null : parseInt(minTierLevel, 10);
+      const parsedFreeAt = freeAt.trim() === '' ? null : new Date(freeAt).toISOString();
+
       if (isEditMode && existingPost) {
         // Update existing post
-        const updatePostRequest: UpdatePostRequest = {
-          title: formData.title,
-          content: editorContent,
-          slug: slug,
-          postNumber: formData.postNumber,
-          isPublished: formData.isPublished,
-          thumbnailUrl: formData.thumbnailUrl || null,
-          seriesId: formData.seriesId === 'none' ? null : formData.seriesId || null,
-        };
-
-        await patronClient.posts.update({
+        await updatePost({
           postId: existingPost.id,
-          updatePostRequest,
+          body: {
+            title: formData.title,
+            content: editorContent,
+            slug: slug,
+            postNumber: formData.postNumber,
+            isPublished: formData.isPublished,
+            thumbnailUrl: formData.thumbnailUrl || null,
+            seriesId: formData.seriesId === 'none' ? null : formData.seriesId || null,
+            kind,
+            minTierLevel: parsedMinTier,
+            clearMinTier: parsedMinTier === null,
+            priceCents: parsedPrice,
+            clearPrice: parsedPrice === null,
+            freeAt: parsedFreeAt,
+            clearFreeAt: parsedFreeAt === null,
+            imageFileIds,
+          },
         });
         console.log('Post updated successfully');
       } else {
         // Create new post
-        const createPostRequest: CreatePostRequest = {
+        await createPost({
           seriesId: formData.seriesId === 'none' ? '' : formData.seriesId || '',
           title: formData.title,
           content: editorContent,
@@ -165,9 +238,12 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
           thumbnailUrl: formData.thumbnailUrl || null,
           audioFileId: null,
           videoFileId: null,
-        };
-
-        await patronClient.posts.create(createPostRequest);
+          kind,
+          minTierLevel: parsedMinTier,
+          priceCents: parsedPrice,
+          freeAt: parsedFreeAt,
+          imageFileIds,
+        });
         console.log('Post created successfully');
       }
 
@@ -295,11 +371,13 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="none">No Series</SelectItem>
-                        {series?.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            {s.title}
-                          </SelectItem>
-                        ))}
+                        {series
+                          ?.filter((s) => !(s as { isFeed?: boolean }).isFeed)
+                          .map((s) => (
+                            <SelectItem key={s.id} value={s.id}>
+                              {s.title}
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -307,6 +385,108 @@ const PostForm = ({ existingPost, isEditMode = false }: PostFormProps): JSX.Elem
                 )}
               />
             </div>
+
+            {/* Kind and Access Row */}
+            <div className="flex flex-wrap items-end gap-6">
+              <div className="flex flex-col gap-2">
+                <FormLabel>Kind</FormLabel>
+                <Select value={kind} onValueChange={(value) => setKind(value as PostKind)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select kind..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POST_KINDS.map((postKind) => (
+                      <SelectItem key={postKind} value={postKind}>
+                        {postKind}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <FormLabel>Minimum tier</FormLabel>
+                <Select value={minTierLevel} onValueChange={setMinTierLevel}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Everyone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="everyone">Everyone</SelectItem>
+                    {tiers.map((tier) => (
+                      <SelectItem key={tier.id} value={String(tier.level)}>
+                        {tier.name} (level {tier.level})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <FormLabel>One-off price ($, optional)</FormLabel>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-[150px]"
+                  placeholder="e.g. 5.00"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <FormLabel>Free after (optional)</FormLabel>
+                <Input
+                  type="datetime-local"
+                  className="w-[220px]"
+                  value={freeAt}
+                  onChange={(e) => setFreeAt(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {/* Image gallery for `images` posts */}
+            {kind === 'images' && (
+              <div className="flex flex-col gap-2">
+                <FormLabel>Image gallery</FormLabel>
+                <input
+                  id="post-gallery-upload"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => setGalleryFiles(Array.from(e.target.files || []))}
+                  className="hidden"
+                />
+                <div className="flex items-center gap-3">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    shadow={false}
+                    containerClassName="w-max"
+                    onClick={() => document.getElementById('post-gallery-upload')?.click()}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Choose Images
+                  </Button>
+                  <span className="text-sm">
+                    {galleryFileIds.length > 0 && `${galleryFileIds.length} uploaded`}
+                    {galleryFileIds.length > 0 && galleryFiles.length > 0 && ', '}
+                    {galleryFiles.length > 0 && `${galleryFiles.length} new selected`}
+                  </span>
+                  {galleryFileIds.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      shadow={false}
+                      containerClassName="w-max"
+                      onClick={() => setGalleryFileIds([])}
+                    >
+                      Clear uploaded
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Content Editor */}
             <FormField

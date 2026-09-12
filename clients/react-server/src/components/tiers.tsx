@@ -1,5 +1,5 @@
 /* eslint-disable max-params */
-import { JSX, useState } from 'react';
+import { JSX, useCallback, useEffect, useState } from 'react';
 import { Pencil, Trash, Plus } from 'lucide-react';
 import PxBorder from '@/components/px-border';
 import FocusRing from '@/components/focus-ring';
@@ -25,22 +25,25 @@ import {
 import { Input } from '@/components/ui/input';
 import { Button } from './ui/button';
 import { useForm } from 'react-hook-form';
+import { createTier, deleteTier, getTiers, TierResponse, updateTier } from '@/lib/api';
 
 export type Tier = {
-  id: string | number;
+  id: string;
   name: string;
   features: string[];
-  price: number | string;
+  price: number;
+  level: number;
+  isActive: boolean;
 };
 
 type TiersProps = {
-  tiers: Tier[];
   trigger?: React.ReactNode;
 };
 
 type TierFormData = {
   name: string;
   price: string;
+  level: string;
   features: string[];
 };
 
@@ -51,6 +54,22 @@ type TierFormProps = {
   onCancel: () => void;
   isSubmitting?: boolean;
 };
+
+/**
+ * Maps an API tier onto the UI tier shape (cents to dollars, description
+ * lines to features).
+ *
+ * @param {TierResponse} tier - The API tier
+ * @returns {Tier} The UI tier
+ */
+const toUiTier = (tier: TierResponse): Tier => ({
+  id: tier.id,
+  name: tier.name,
+  features: (tier.description || '').split('\n').filter((line) => line.trim() !== ''),
+  price: tier.priceCents / 100,
+  level: tier.level,
+  isActive: tier.isActive,
+});
 
 /**
  * Tier form component for adding/editing tiers.
@@ -72,6 +91,7 @@ const TierForm = ({
     defaultValues: {
       name: initialData?.name || '',
       price: initialData?.price || '',
+      level: initialData?.level || '',
       features: initialData?.features || [''],
     },
   });
@@ -189,6 +209,7 @@ const TierForm = ({
         <FormField
           control={form.control}
           name="name"
+          rules={{ required: 'Name is required' }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>Tier Name</FormLabel>
@@ -203,11 +224,27 @@ const TierForm = ({
         <FormField
           control={form.control}
           name="price"
+          rules={{ required: 'Price is required' }}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Price ($)</FormLabel>
+              <FormLabel>Price ($ / month)</FormLabel>
               <FormControl>
-                <Input placeholder="Enter price" type="number" {...field} />
+                <Input placeholder="Enter price" type="number" step="0.01" min="0" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="level"
+          rules={{ required: 'Level is required' }}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Level (higher levels include everything below)</FormLabel>
+              <FormControl>
+                <Input placeholder="Enter level" type="number" min="1" step="1" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -256,19 +293,32 @@ const TierForm = ({
 
 /**
  * Render a grid of membership tiers with a leading "Manage tiers" card.
- * All tier operations (manage, edit) are handled internally within this component.
+ * Tiers are loaded from and persisted to the /api/tiers endpoints.
  *
  * @param root0 Destructured props
- * @param root0.tiers List of tiers to display
  * @param root0.trigger Optional custom trigger element for the manage dialog
  * @returns JSX element containing the tiers grid with internal operation handlers
  */
-const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
+const Tiers = ({ trigger }: TiersProps): JSX.Element => {
+  const [tiers, setTiers] = useState<Tier[]>([]);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState<Tier | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const loadTiers = useCallback(async (): Promise<void> => {
+    try {
+      const apiTiers = await getTiers();
+      setTiers(apiTiers.map(toUiTier));
+    } catch (error) {
+      console.error('Failed to load tiers:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadTiers();
+  }, [loadTiers]);
 
   /**
    * Handles opening the edit dialog for a tier.
@@ -308,10 +358,16 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
 
     setIsSubmitting(true);
     try {
-      // Here you would typically make an API call to update the tier
-      console.log('Updating tier:', selectedTier.id, data);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await updateTier({
+        tierId: selectedTier.id,
+        body: {
+          name: data.name,
+          description: data.features.join('\n') || null,
+          level: parseInt(data.level, 10),
+          priceCents: Math.round(parseFloat(data.price) * 100),
+        },
+      });
+      await loadTiers();
       setEditDialogOpen(false);
       setSelectedTier(null);
     } catch (error) {
@@ -329,10 +385,13 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
   const handleAddSubmit = async (data: TierFormData): Promise<void> => {
     setIsSubmitting(true);
     try {
-      // Here you would typically make an API call to create the tier
-      console.log('Creating tier:', data);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await createTier({
+        name: data.name,
+        description: data.features.join('\n') || null,
+        level: parseInt(data.level, 10),
+        priceCents: Math.round(parseFloat(data.price) * 100),
+      });
+      await loadTiers();
       setAddDialogOpen(false);
     } catch (error) {
       console.error('Error creating tier:', error);
@@ -349,10 +408,8 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
 
     setIsSubmitting(true);
     try {
-      // Here you would typically make an API call to delete the tier
-      console.log('Deleting tier:', selectedTier.id);
-      // Simulate API call
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await deleteTier(selectedTier.id);
+      await loadTiers();
       setDeleteDialogOpen(false);
       setSelectedTier(null);
     } catch (error) {
@@ -361,6 +418,8 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
       setIsSubmitting(false);
     }
   };
+
+  const nextLevel = tiers.reduce((max, tier) => Math.max(max, tier.level), 0) + 1;
 
   return (
     <>
@@ -384,7 +443,10 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
           <div className="mb-5 flex flex-col gap-3">
             {tiers.map((tier) => (
               <div key={tier.id} className="flex items-center justify-between">
-                <h3 className="text-lg">{tier.name}</h3>
+                <h3 className="text-lg">
+                  {tier.name}
+                  {!tier.isActive && ' (inactive)'}
+                </h3>
                 <div className="flex gap-2">
                   <Button
                     size="icon"
@@ -429,6 +491,7 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
                 ? {
                     name: selectedTier.name,
                     price: selectedTier.price.toString(),
+                    level: selectedTier.level.toString(),
                     features: selectedTier.features,
                   }
                 : undefined
@@ -447,6 +510,7 @@ const Tiers = ({ tiers, trigger }: TiersProps): JSX.Element => {
             <AlertDialogTitle>Add New Tier</AlertDialogTitle>
           </AlertDialogHeader>
           <TierForm
+            initialData={{ level: nextLevel.toString() }}
             onSubmit={handleAddSubmit}
             onCancel={() => setAddDialogOpen(false)}
             isSubmitting={isSubmitting}
