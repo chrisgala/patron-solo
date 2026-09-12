@@ -52,14 +52,19 @@ impl S3Service {
 
         let config = config_builder.load().await;
 
-        let s3_config = aws_sdk_s3::config::Builder::from(&config)
+        let mut s3_config_builder = aws_sdk_s3::config::Builder::from(&config)
             .timeout_config(
                 aws_sdk_s3::config::timeout::TimeoutConfig::builder()
                     .operation_timeout(std::time::Duration::from_secs(10))
                     .operation_attempt_timeout(std::time::Duration::from_secs(5))
                     .build()
-            )
-            .build();
+            );
+        // Custom endpoints (MinIO etc.) need path-style addressing: the
+        // virtual-hosted style would resolve bucket.localhost hostnames
+        if aws_config.s3_host.is_some() {
+            s3_config_builder = s3_config_builder.force_path_style(true);
+        }
+        let s3_config = s3_config_builder.build();
 
         let client = Client::from_conf(s3_config);
 

@@ -26,7 +26,7 @@ export default function ProtectedRoute({
   redirectTo,
 }: ProtectedRouteProps): JSX.Element {
   const navigate = useNavigate();
-  const { user, isCreator } = useAuth();
+  const { user, isCreator, isRoleLoading } = useAuth();
   const location = useLocation();
 
   useEffect(() => {
@@ -35,7 +35,9 @@ export default function ProtectedRoute({
       return;
     }
 
-    if (requireCreator && user && !isCreator) {
+    // Wait for the role fetch before deciding a creator route: redirecting on
+    // the initial isCreator=false would bounce the creator on direct loads
+    if (requireCreator && user && !isRoleLoading && !isCreator) {
       navigate('/', { replace: true, viewTransition: true });
       return;
     }
@@ -55,6 +57,7 @@ export default function ProtectedRoute({
   }, [
     user,
     isCreator,
+    isRoleLoading,
     requireAuth,
     requireCreator,
     location.pathname,

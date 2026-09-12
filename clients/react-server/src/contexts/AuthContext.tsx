@@ -8,6 +8,8 @@ interface AuthContextType {
   // eslint-disable-next-line no-unused-vars
   setUser: (user: UserInfo | null) => void;
   isCreator: boolean;
+  /** True while the role is still being recovered for a logged-in user */
+  isRoleLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -61,11 +63,13 @@ export const AuthProvider = ({ children, initialUser }: AuthProviderProps): JSX.
   }, [user]);
 
   const isCreator = role === 'creator';
+  const isRoleLoading = user !== null && role === null;
 
   const value = {
     user,
     setUser,
     isCreator,
+    isRoleLoading,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

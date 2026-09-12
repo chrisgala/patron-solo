@@ -1,6 +1,6 @@
 import { patronClient } from '@/lib/utils';
 import { PostResponse, SeriesResponse } from 'patronts/models';
-import { createContext, useContext, ReactNode, JSX, useState } from 'react';
+import { createContext, useContext, ReactNode, JSX, useState, useEffect } from 'react';
 
 interface AppDataContextType {
   posts: PostResponse[] | null;
@@ -92,6 +92,18 @@ export const AppDataProvider = ({
     const postResp = await patronClient.posts.get({ postId });
     setSinglePost(postResp.result);
   };
+
+  // SSR only seeds this data for dashboard routes; after client-side
+  // navigation it is null, so fetch lazily (403s for non-creators are fine)
+  useEffect(() => {
+    if (posts === null) {
+      fetchPosts().catch(() => undefined);
+    }
+    if (series === null) {
+      fetchSeries().catch(() => undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const value = {
     posts,
